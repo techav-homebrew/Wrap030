@@ -320,9 +320,9 @@ always_comb begin
     end
 end
 
-// VRAM data bus should only be asserted during sCWR
+// VRAM data bus should only be asserted during CPU write cycles
 always_comb begin
-    if(timingState == sCWR) begin
+    if(timingState == sCWR || (timingState == sCAK && !cpuRnW)) begin
         vramData <= cpuData;
     end else begin
         vramData <= 8'bZZZZZZZZ;
