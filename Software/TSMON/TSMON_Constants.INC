@@ -136,10 +136,10 @@ trapRestore:        EQU 16
 ; Generic macro for system calls
 
     MACRO callSYS
-    move.l  D0,-(SP)            ; save the working register
-    move.b  \1,D0               ; load syscall number
+    move.l  D1,-(SP)            ; save the working register
+    move.b  \1,D1               ; load syscall number
     trap    #0                  ; call syscall handler
-    move.l  (SP)+,D0            ; restore the working register
+    move.l  (SP)+,D1            ; restore the working register
     ENDM
 
 ;callPSTRING:    MACRO

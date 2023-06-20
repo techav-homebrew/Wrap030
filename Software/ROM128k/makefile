@@ -53,3 +53,12 @@ ALL:
 	$(MAKE) clean
 	$(MAKE) ROM
 	$(MAKE) burn
+
+loadbasic: rambasic.srec
+	$(PYTHON) ..\..\Utilities\srecLoadRAMwin.py COM6 rambasic.srec
+
+rambasic.srec: rambasic.out
+	$(OC) $(OCFLAGS) rambasic.out -O srec rambasic.srec
+
+rambasic.out: fpubasic.o
+	$(LD) -T rambasic.ld -Map rambasic.map -o rambasic.out fpubasic.o

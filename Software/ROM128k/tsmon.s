@@ -69,24 +69,52 @@ VECTOR:
 | Monitor cold start initialization
 _start:
 CheckOverlay:
+        move.b #3,acia1Com              | reset ACIA 1
+        move.b #aciaSet,acia1Com        | configure ACIA 1
+        debugPrint 0x0d                 | outputt a newline first
+        debugPrint 0x0a
         move.L #0x55AA55AA,%d0          | test pattern
         move.L #ramBot,%a0              | get base of memory
         move.L %d0,%a0@                 | write to first memory address
         move.l %a0@,%d1                 | read back pattern
-        cmp.L %d1,%d0                   | check if they match
-        beq.s ClearMainMemory           | if matching, then overlay is already disabled
+        cmp.L  %d1,%d0                  | check if they match
+        beq.s  ClearMainMemory                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | if matching, then overlay is already disabled
 ClearOverlay:
         move.B #0,overlayPort           | disable startup overlay
 ClearMainMemory:
-        move.l #stackTop,%a0            | start at top of memory space
-        move.l #stackTop>>2,%d0         | set up loop counter
-.clrRamLp:
-        move.l #0,%a0@-                 | zero out memory
-        dbra %d0,.clrRamLp              | loop until all is cleared
+        lea    stackTop,%a0             | get top of memory space
+        move.l %a0,%d0                  | copy to loop counter
+        lsr.l  #2,%d0                   | convert into long word count
+        swap   %d0                      | get count of 64k long word pages
+        move.w %d0,%d1                  | copy that count to D1 as page counter
+        subq.w #1,%d1                   | decrement by 1 to avoid an early bus error
+        eor.l  %d2,%d2                  | zero out D2 to use for zeroing memory
+clrRamPgLp:
+        move.w #0xffff,%d0              | use D0 as count of long words to copy
+clrRamLWlp:
+        move.l %d2,%a0@-                | zero out memory
+        dbra   %d0,clrRamLWlp           | loop until this page is cleared
+        debugPrint '.'                  | status display
+        dbra   %d1,clrRamPgLp           | loop until all pages cleared
+        debugPrint '-'                  | status indicator: memory clear complete
+
 InitRamVectors:
         move.l #ramBot,%a0              | get bottom of RAM again
         move.l #stackTop,%a0@(0)        | fill in initial SP again
-        move.l #_start,%a0@(4)          | and initial PC ... just in case
+|        move.l #_start,%a0@(4)          | and initial PC ... just in case
+        move.l #COLD,%a0@(4)            | load the TSMON "COLD" subroutine into
+                                        | the initial PC restart vector at the 
+                                        | base of memory so that we only clear
+                                        | memory on initial power on
+                                        | if we reset later, skip the memory
+                                        | initialization and jump ahead to 
+                                        | restarting the monitor
+                                        | (this requires coordination with the
+                                        | main board glue logic, which should
+                                        | be made to not clear the overlay 
+                                        | register when the reset signal is
+                                        | asserted)
+        debugPrint ':'                  | status indicator: pre-monitor complete
 
 | ***************************************************************************
 | This is the main program which assembles a command in the line
@@ -130,9 +158,9 @@ WARM:
 
 SETACIA:                                | Setup ACIA parameters
         LEA     ACIA_1,%a0              | A0 points to console ACIA
-        MOVE.B  #0x03,%a0@              | Reset ACIA 1
+|        MOVE.B  #0x03,%a0@              | Reset ACIA 1
         MOVE.B  #0x03,%a0@(acia2offset) | Reset ACIA 2
-        MOVE.B  #aciaSet,%a0@           | Configure ACIA 1
+|        MOVE.B  #aciaSet,%a0@           | Configure ACIA 1
         MOVE.B  #aciaSet,%a0@(acia2offset)      | Configure ACIA 2
         RTS
 

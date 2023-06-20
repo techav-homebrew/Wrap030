@@ -26,8 +26,8 @@
 
 |    .equ expROM, romSector1
 
-    .equ ramTop, 0x001FFFFF
-    .equ stackTop, ramTop+1
+|    .equ ramTop, 0x001FFFFF
+|    .equ stackTop, ramTop+1
 |    .equ ramBot, 0x00000000
 
 

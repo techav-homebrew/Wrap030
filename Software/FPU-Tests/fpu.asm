@@ -17,3 +17,6 @@
     FADD    FP1,FP0
     FMOVE.s FP0,$2008
     RTS
+
+    MOVE.b  #'A',D0
+    TRAP    #0
