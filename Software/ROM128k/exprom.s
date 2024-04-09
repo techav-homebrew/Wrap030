@@ -37,22 +37,25 @@ RM2INIT:
     callSYS trapPutString
     callSYS trapNewLine
 
-| Check if video installed & intialize
+|; Add custom trap handler
+    bsr     trapInit
+
+|; Check if video installed & intialize
     bsr     vidInit             | initialize video
 
-| Check if FPU installed
+|; Check if FPU installed
     BSR     ucFPUCHK
 
-| Enable L1 cache
+|; Enable L1 cache
     BSR     ucCEnable           | enable cache by default
 
-| Return to monitor
+|; Return to monitor
     lea     %pc@(sROM2end),%a4  | get final banner message pointer
     callSYS trapPutString       | print it
     callSYS trapNewLine         | and finish with a newline
     RTS
 
-|User Command Table
+|;User Command Table
 UCOM:	
     DC.B	4,4
     .ascii "HELP"
@@ -78,15 +81,60 @@ UCOM:
     dc.B    4,4
     .ascii "BOOT"
     dc.L    ucBOOT
+    dc.b    6,4
+    .ascii  "DSKRST"
+    dc.l    ucDRST
     DC.B	0,0
-|String Constants
+|;String Constants
 sBNR:	.ascii "Initializing ROM 2\0\0"
 sROM2end:   .ascii "ROM2 Init Complete.\0"
 
     .even
 
 |******************************************************************************
-| VIDEO INITIALIZATION
+|; CUSTOM TRAPS
+|******************************************************************************
+
+|; add trap vector to vector table
+trapInit:
+    sub.l   %a4,%a4                         |; get ptr to vector table start
+    move.l  #trap1Handler,%a4@(0x84)        |; set TRAP #1 vector
+    rts
+
+trap1Handler:
+usys0:                                      |; Cache Enable
+    cmp.b   #0,%d1
+    bne.s   usys1
+    bsr     cacheDisable
+    rte
+usys1:                                      |; Cache Disable
+    cmp.b   #1,%d1
+    bne.s   usys2
+    bsr     cacheDisable
+    rte
+usys2:                                      |; FPU Check
+    cmp.b   #2,%d1
+    bne.s   usys3
+    bsr     fpuCheck
+    rte
+usys3:                                      |; Disk Check
+    cmp.b   #3,%d1
+    bne.s   usys4
+    bsr     ideCheck
+    rte
+usys4:                                      |; Load Disk Sector
+    cmp.b   #4,%d1
+    bne.s   usys5
+    bsr     ideCheck
+    rte
+usys5:
+
+usysErr:
+    rte
+
+
+|******************************************************************************
+|; VIDEO INITIALIZATION
 |******************************************************************************
 vidInit:
     eor.b   %d0,%d0                     | clear D0
@@ -210,6 +258,7 @@ sHELP2:
     .ascii "SECTor <ADDRESS>               - Print disk sector contents\r\n"
     .ascii "FPUchk                         - Check if FPU is installed\r\n"
     .ascii "BOOT                           - Execute boot block from disk\r\n"
+    .ascii "DSKRST                         - Reset IDE disk\r\n"
     DC.B	0,0
 
     .even
@@ -371,28 +420,63 @@ sBASerr:
 | 68030 CACHE FUNCTIONS
 |******************************************************************************
 | Enable 68030 cache
-ucCEnable:
-    MOVEM.L %a4/%d0,%a7@-     | save working registers
-    move.l  #0x00000101,%d0    | enable data & instruction cache
-|    DC.L    $4e7b0002       | movec D0,CACR
-    movec   %d0,%cacr
-    lea     %pc@(sCEN),%a4     | get pointer to feedback string
-    callSYS trapPutString
-    callSYS trapNewLine
-    MOVEM.L %a7@+,%d0/%a4     | restore working registers
-    RTS
 
-| Disable 68030 cache
-ucCDisable:
-    MOVEM.L %a4/%d0,%a7@-     | save working registers
-    EOR.L   %d0,%d0           | disable data & instruction cache
-|    DC.L    $4e7b0002       | movec %d0,CACR
-    movec   %d0,%cacr
-    lea     %pc@(sCDIS),%a4    | get pointer to feedback string
-    callSYS trapPutString
+|; enable CPU cache
+cacheEnable:
+    move.l  %d0,%sp@-                       |; save working register
+    move.l  #0x00000101,%d0                 |; enable data & instruction cache
+    movec   %d0,%cacr                       |; write to cache control register
+    move.l  %sp@+,%d0                       |; restore register
+    rts
+
+|; disable CPU cache
+cacheDisable:
+    move.l  %d0,%sp@-                       |; save working register
+    moveq.l #0,%d0                          |; disable data & instruction cache
+    movec   %d0,%cacr                       |; write to cache control register
+    move.l  %sp@+,%d0                       |; restore register
+    rts
+
+|; user command for CPU cache enable
+ucCEnable:
+    move.l  %a4,%sp@-
+    bsr     cacheEnable
+    sysPrnt sCEN
     callSYS trapNewLine
-    MOVEM.L %a7@+,%d0/%a4     | restore working registers
-    RTS
+    move.l  %sp@+,%a4
+    rts
+
+|; user command for CPU cache disable
+ucCDisable:
+    move.l  %a4,%sp@-
+    bsr     cacheDisable
+    sysPrnt sCDIS
+    callSYS trapNewLine
+    move.l  %sp@+,%a4
+    rts
+
+|; ucCEnable:
+|;     MOVEM.L %a4/%d0,%a7@-     |; save working registers
+|;     move.l  #0x00000101,%d0    |; enable data & instruction cache
+|; |;    DC.L    $4e7b0002       |; movec D0,CACR
+|;     movec   %d0,%cacr
+|;     lea     %pc@(sCEN),%a4     |; get pointer to feedback string
+|;     callSYS trapPutString
+|;     callSYS trapNewLine
+|;     MOVEM.L %a7@+,%d0/%a4     |; restore working registers
+|;     RTS
+
+|; |; Disable 68030 cache
+|; ucCDisable:
+|;     MOVEM.L %a4/%d0,%a7@-     |; save working registers
+|;     EOR.L   %d0,%d0           |; disable data & instruction cache
+|; |;    DC.L    $4e7b0002       |; movec %d0,CACR
+|;     movec   %d0,%cacr
+|;     lea     %pc@(sCDIS),%a4    |; get pointer to feedback string
+|;     callSYS trapPutString
+|;     callSYS trapNewLine
+|;     MOVEM.L %a7@+,%d0/%a4     |; restore working registers
+|;     RTS
 
 sCEN:
     .ascii "CPU L1 Cache Enabled.\0\0"
@@ -404,131 +488,316 @@ sCDIS:
 |******************************************************************************
 | IDE+FAT DISK FUNCTIONS
 |******************************************************************************
+|;    .include    "ide.s"
 
-| check for disk presence
-| RETURNS:
-|   D0 - 1: disk present| 0: no disk present
-dskChk:
-    lea     ideLBAHHRW,%a0   | get LBA HH address
-    move.b  #0xE0,%a0@       | set disk to LBA mode
-    move.b  %a0@,%d0         | read back set value to compare
-    cmp.b   #0xE0,%d0         | make sure it matches
-    bne     .dskChkNo       | branch if no disk
-    move.b  #1,%d0           | return 1 if disk present
-    rts                     | 
-.dskChkNo:
-    move.b  #0,%d0           | return 0 if no disk present
+|; check if disk is present.
+|; return %d0.l = 0: no disk | 1: disk found
+ideCheck:
+    lea     ideStatusRO,%a0                 |; get status port pointer
+    move.b  %a0@,%d0                        |; get status byte
+    tst.b   %d0                             |; is it 0?
+    bne     .ideCheckYes
+    rts
+.ideCheckYes:
+    moveq.l #1,%d0
     rts
 
-| read one sector from disk
-| PARAMETERS:
-|   A0 - LBA
-|   A1 - read buffer
-| RETURNS:
-|   D0 - 1: success| 0: error
-dskRdSect:
-    movem.l %a0-%a2/%a4/%d1-%d3,%sp@-
-    bsr     dskChk              | check if disk present
-    cmp.b   #1,%d0               |
-    bne     .dskRdErr1          | jump to error if no disk
-    move.l  %a0,%d0               | copy provided LBA to D0
-    or.l    #0x40000000,%d0       | set flag to use LBA addressing
-    move.l  #ideBase,%a2         | get base IDE address
-    move.b  %d0,%a2@(ideLBALLRW)   | set LBA LL byte
-    lsr.l   #8,%d0               | shift next byte into position
-    move.b  %d0,%a2@(ideLBALHRW)   | set LBA LH byte
-    lsr.l   #8,%d0               | shift next byte into position
-    move.b  %d0,%a2@(ideLBAHLRW)   | set LBA HL byte
-    lsr.l   #8,%d0               | shift last byte into position
-    move.b  %d0,%a2@(ideLBAHHRW)   | set LBA HH byte & flag
-    move.b  #1,%a2@(ideSectorCountRW) | tell disk to transfer 1 sector only
-    move.b  #ideCmdReadSect,%a2@(ideCommandWO)    | send Read Sector command
-    move.w  #0xFF,%d0             | set loop counter to 256 words
-.dskRdLoop:
-    moveq   #0,%d2               | clear error counter
-.dskRdLp1:
-    move.b  %a2@(ideStatusRO),%d1  | check disk status
-    btst    #7,%d1               | check disk busy bit
-    beq     .dskRdLp2           | if clear, go read next word
-    addi.b  #1,%d2               | increment error counter
-    tst.b   %d2                  | test if error counter has overflowed to 0
-    beq     .dskRdErr2          | jump to error for read timeout
-    bra     .dskRdLp1           | keep looping if we have not timed out yet
-.dskRdLp2:
-    btst    #0,%d1               | check for read error
-    bne     .dskRdErr3          | if error, then jump to error
-    move.w  %a2@,%d3             | read word from disk
-    lsl.w   #8,%d3               | byte swap to correct wiring error
-    move.w  %d3,%a1@+            | save word to disk buffer
-    dbra    %d0,.dskRdLoop       | keep looping until all 256 words read
-    move.b  #1,%d0               | set read success flag
-.dskRdEnd:
-    movem.l %a7@+,%a0-%a2/%a4/%d1-%d3    | restore working registers
-    rts                         | and return
-.dskRdErr1:
-    lea     %pc@(sCHKDn),%a4       | load pointer to no disk error string
-    callSYS trapPutString                 | print error message
-    move.b  #0,%d0               | set error flag
-    bra     .dskRdEnd           | jump to end
-.dskRdErr2:
-    move.b  #ideCmdNOP,%a2@(ideCommandWO) | send disk NOP command
-    lea     %pc@(sDSKRDerr),%a4    | load pointer to disk read error string
-    callSYS trapPutString                 | print error message
-    move.b  #0,%d0               | set error flag
-    bra     .dskRdEnd           | jump to end
-.dskRdErr3:
-    move.b  %d1,%d0               | we have an actual error to look up
-    bsr     dskErr              | jump to disk error handler
-    bra     .dskRdEnd           | jump to end
+|; read a disk sector
+|; parameters:
+|;  d0.l:   LBA
+|;  a0.l:   buffer pointer
+|; returns:
+|;  d0.l    0: error | 512: success
+ideReadSect:
+    movem.l %a0-%a2/%d1-%d4,%sp@-
+    bsr     cacheDisable                    |; disable cache before reading disk
+    |; debug print stuff
+    movem.l %a0/%d0,%sp@-                   |; save parameters
+    sysPrnt sReadSectSectHead
+    move.l  %sp@(0),%d0
+    callSYS trapPutHexLong
+    callSYS trapNewLine
+    sysPrnt sReadSectBufHead
+    move.l  %sp@(4),%d0
+    callSYS trapPutHexLong
+    callSYS trapNewLine
+    movem.l %sp@+,%a0/%d0                   |; restore parameters
 
-| check disk error and print helpful message
-| PARAMETERS
-|   D0 - IDE error register
+    |; initialize read sector command
+    move.l  %d0,%d1                         |; copy LBA to work with it
+    andi.l  #0x0fffffff,%d1                 |; mask 28-bit LBA
+    ori.l   #0xe0000000,%d1                 |; enable LBA mode
+    lea     ideLBALLRW,%a1                  |; get first LBA reg pointer
+    move.b  %d1,%a1@                        |; send first byte of LBA
+    ror.l   #8,%d1                          |; shift in next byte
+    lea     ideLBALHRW,%a1                  |; get next LBA reg pointer
+    nop                                     |; enforce IDE PIO 0 cycle timing
+    nop
+    move.b  %d1,%a1@
+    ror.l   #8,%d1
+    lea     ideLBAHLRW,%a1
+    nop
+    nop
+    move.b  %d1,%a1@
+    ror.l   #8,%d1
+    lea     ideLBAHHRW,%a1
+    nop
+    nop
+    move.b  %d1,%a1@
+    lea     ideSectorCountRW,%a1            |; get sector count reg pointer
+    nop                                     |; enforce IDE cycle timing
+    nop
+    nop
+    move.b  #1,%a1@                         |; set transfer size to 1 sector
+    lea     ideCommandWO,%a1                |; get command reg pointer
+    nop                                     |; enforce IDE cycle timing
+    nop
+    nop
+    move.b  #0x20,%a1@                      |; send read command
+
+    |; wait for disk not busy, ready, & data ready
+    |; debug print stuff
+    movem.l %a0/%d0,%sp@-                   |; save parameters
+    sysPrnt sReadSectWaitReady
+    callSYS trapNewLine
+    movem.l %sp@+,%a0/%d0                   |; restore parameters
+
+    lea     ideStatusRO,%a1                 |; get pointer to status
+    lea     ideDataRW,%a2                   |; get pointer to IDE data port
+.ideReadSectLp1Setup:
+    move.l  #0x000007ff,%d2                 |; set up wait limit
+.ideReadSectLp1:
+    move.b  %a1@,%d1                        |; check status
+    btst.b  #7,%d1                          |; check busy bit
+    bne     .ideReadSectLp1count            |; if busy set, goto limit
+    btst.b  #6,%d1                          |; check disk ready bit
+    beq     .ideReadSectLp1count            |; if not set, goto limit
+    btst.b  #3,%d1                          |; check data ready bit
+    beq     .ideReadSectLp1count            |; if not set, goto limit
+    btst.b  #0,%d1                          |; check error bit
+    bne     .ideReadSectErrorSet            |; if set, goto disk error
+    bra     .ideReadSectReady               |; ready to read
+.ideReadSectLp1count:
+    subq.l  #1,%d2                          |; decrement counter
+    cmp.l   #0,%d2
+    ble     .ideReadSectLp1Expired          |; loop expired
+    bra     .ideReadSectLp1                 |; else continue loop
+
+.ideReadSectReady:                          |; main read loop
+    move.w  #255,%d3                        |; set up sector word counter
+.ideReadSectReadLp:
+    move.w  %a2@,%d0                        |; read word from disk
+    move.w  %d0,%a0@+                       |; save word to buffer & incr ptr
+    dbra    %d3,.ideReadSectReadLp          |; loop until entire sector read
+
+.ideReadSectDone:
+    sysPrnt sReadSectDone
+    callSYS trapNewLine
+    move.l  #512,%d0                        |; set success
+
+.ideReadSectEnd:                            |; clean up and return
+    bsr     cacheEnable                     |; re-enable cache
+    movem.l %sp@+,%a0-%a2/%d1-%d4           |; restore registers
+    rts
+
+.ideReadSectLp1Expired:
+    move.l  %d1,%sp@-                       |; save status byte
+    sysPrnt sReadSectTimeout
+    move.l  %sp@+,%d0                       |; retrieve status byte
+    callSYS trapPutHexByte
+    callSYS trapNewLine
+.ideReadSectPrintErrByte:
+    sysPrnt sReadSectErrorByte
+    lea     ideErrorRO,%a1                  |; get pointer to error reg
+    move.b  %a1@,%d0
+    callSYS trapPutHexByte
+    callSYS trapNewLine
+    moveq.l #0,%d0                          |; return 0 on error
+    bra     .ideReadSectEnd                 |; end 
+
+.ideReadSectErrorSet:                       |; print header for disk error
+    sysPrnt sReadSectErrorHead
+    callSYS trapNewLine
+    bra     .ideReadSectPrintErrByte        |; then print error byte & end
+
+sReadSectSectHead:  .ascii  "Reading sector: \0\0"
+sReadSectBufHead:   .ascii  "Using buffer: \0\0"
+sReadSectWaitReady: .ascii  "Waiting for disk ... \0\0"
+sReadSectTimeout:   .ascii  "Timeout waiting for disk. Status byte: \0\0"
+sReadSectErrorByte: .ascii  "Disk error byte: \0\0"
+sReadSectErrorHead: .ascii  "Disk reported error: \0\0"
+sReadSectDone:      .ascii  "Disk read complete.\0\0"
+
+    .even
+
+|; user command to check for disk presence
+ucCHKD:
+    bsr     ideCheck
+    tst.b   %d0
+    bne     .ucCHKDyes
+    sysPrnt sDskChkNo
+    rts
+.ucCHKDyes:
+    sysPrnt sDskChkYes
+    rts
+
+sDskChkYes: .ascii "Disk present.\r\n?\0\0"
+sDskChkNo:  .ascii "Disk not found.\r\n?\0\0"
+    .even
+
+|; user command to reset IDE disk
+ucDRST:
+    lea     ideDevControlWO,%a0             |; get pointer to control port
+    move.b  #0x0E,%a0@                      |; reset & disable interrupts
+    move.w  0x7f,%d0                        |; set up delay
+.ucDRSTlp:
+    dbra    %d0,.ucDRSTlp                   |; reset delay loop
+    move.b  #0x0A,%a0@                      |; finish reset
+    sysPrnt sDskRst
+    callSYS trapNewLine
+    rts
+
+sDskRst:    .ascii "Disk reset complete.\0\0"
+    .even
+
+|; user command to print disk sector contents to console
+ucSECT:
+    movem.l %a0-%a1/%d0-%d3/%d7,%sp@-       |; save working registers
+    callSYS trapGetParam                    |; get sector number as parameter
+    tst.b   %d7                             |; test for input error
+    bne     .ucSECTerr1                     |; exit if error
+
+    lea     DATA,%a0                        |; get heap pointer
+    lea     %a0@(dskBUF),%a0                |; get pointer to disk buffer
+    
+    move.l  %d0,%sp@-                       |; save sector number
+    |; %d0.l = LBA
+    |; %a0.l = buffer
+    bsr     ideReadSect                     |; read sector
+
+    tst.l   %d0                             |; 0 on error
+    beq     .ucSECTerr2
+
+    move.l  %sp@+,%d0                       |; restore sector number
+    move.l  %d0,%d3                         |; copy sector number
+    clr.b   %d2                             |; clear line count
+    lea     DATA,%a1                        |; get heap pointer again
+    lea     %a1@(dskBUF),%a1                |; get disk buffer pointer
+.ucSECT1:
+    clr.b   %d1                             |; clear word count
+    callSYS trapNewLine                     |;
+.ucSECT2:
+    move.l  %d3,%d0                         |; copy sector to working reg
+    lsl.l   #1,%d0                          |; divide sector by 2 to get base address
+    btst    #4,%d2                          |; check if second half of buffer
+    beq     .ucSECT3                        |; if no, then skip ahead
+    ori.l   #1,%d0                          |; if second half, set low bit of base address
+.ucSECT3:
+    callSYS trapPutHexLong                  |; print base address
+    move.b  %d2,%d0                         |; copy line count to working register
+    lsl.b   #4,%d0                          |; shift by 4 to get low byte of address
+    callSYS trapPutHexByte                  |; print low byte of base address
+.ucSECT4:
+    callSYS trapPutSpace                    |;
+    move.w  %a1@+,%d0                       |; get next word from buffer
+    callSYS trapPutHexWord                  |; and print it
+    addi.b  #1,%d1                          |; increment word counter
+    cmp.b   #8,%d1                          |; check for end of line
+    bne     .ucSECT4                        |; continue line
+    addi.b  #1,%d2                          |; else increment line counter
+    cmp.b   #0x20,%d2                       |; check for end of buffer
+    bne     .ucSECT1                        |; if not end, start new line
+.ucSECTend:
+    movem.l %sp@+,%a0-%a1/%d0-%d3/%d7       |; restore working registers
+    rts
+
+.ucSECTerr1:
+    lea     %pc@(sINPUTerr),%a4             |; input error string pointer
+    callSYS trapPutString                   |; print error
+    bra     .ucSECTend                      |; exit function
+.ucSECTerr2:
+    add.l   #4,%sp                          |; pop off previously saved d0
+    lea     %pc@(sDSKRDerr),%a4             |; unknown error string pointer
+    callSYS trapPutString
+    bra     .ucSECTend
+
+
+|; user command to load disk sector 0 into memory & attempt to run it
+ucBOOT:
+    movem.l %a0-%a6/%d0-%d7,%sp@-           |; save all registers before 
+                                            |; jumping to user program
+    sysPrnt sBootStart
+    lea     DATA,%a0                        |; get bss pointer
+    move.l  %sp,%a0@(STACK_SAVE)            |; save stack pointer
+    lea     %a0@(dskBUF),%a0                |; get disk buffer pointer
+    clr.l   %d0                             |; set D0 for sector 0
+    bsr     ideReadSect                     |; read boot sector
+    cmp.l   #0,%d0                          |; check for error
+    beq     .ucBOOTerr                      |; jump on read error
+    jsr     %a0@                            |; else jump to user program
+    |; this is where we'll end up if the user program returns
+    lea     DATA,%a0                        |; get bss pointer
+    move.l  %a0@(STACK_SAVE),%sp            |; restore stack pointer
+    movem.l %sp@+,%a0-%a6/%d0-%d7           |; restore registers
+    rts                                     |; return to monitor
+.ucBOOTerr:
+    sysPrnt sBootErr
+    callSYS trapNewLine
+    movem.l %sp@+,%a0-%a6/%d0-%d7           |; restore registers
+    rts
+
+sBootStart: .ascii  "Booting from disk ...\r\n\0\0"
+sBootErr:   .ascii  "Error reading disk boot sector.\0\0"
+    .even
+
+|; check disk error and print helpful message
+|; PARAMETERS
+|;   D0 - IDE error register
 dskErr:
     btst    #7,%d0
-    beq     .dskErr6
-    lea     %pc@(sDSKerr7),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr6
+    lea     %pc@(sDSKerr7),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr6:
     btst    #6,%d0
-    beq     .dskErr5
-    lea     %pc@(sDSKerr6),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr5
+    lea     %pc@(sDSKerr6),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr5:
     btst    #5,%d0
-    beq     .dskErr4
-    lea     %pc@(sDSKerr5),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr4
+    lea     %pc@(sDSKerr5),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr4:
     btst    #4,%d0
-    beq     .dskErr3
-    lea     %pc@(sDSKerr4),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr3
+    lea     %pc@(sDSKerr4),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr3:
     btst    #3,%d0
-    beq     .dskErr2
-    lea     %pc@(sDSKerr3),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr2
+    lea     %pc@(sDSKerr3),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr2:
     btst    #2,%d0
-    beq     .dskErr1
-    lea     %pc@(sDSKerr2),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr1
+    lea     %pc@(sDSKerr2),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr1:
     btst    #1,%d0
-    beq     .dskErr0
-    lea     %pc@(sDSKerr1),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErr0
+    lea     %pc@(sDSKerr1),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErr0:
     btst    #0,%d0
-    beq     .dskErrN
-    lea     %pc@(sDSKerr0),%a4     | get address of error message
-    bra     .dskErrEnd          | and jump to end
+    bne     .dskErrN
+    lea     %pc@(sDSKerr0),%a4              | get address of error message
+    bra     .dskErrEnd                      | and jump to end
 .dskErrN:
     lea     %pc@(sDSKRDerr),%a4
 .dskErrEnd:
-    callSYS trapPutString      | print selected error message
-    rts                         | and return
+    callSYS trapPutString                   | print selected error message
+    rts                                     | and return
 
 sCHKDy:	    .ascii "Disk found.\r\n\0\0"
 sCHKDn:	    .ascii "No disk inserted.\r\n\0\0"
@@ -536,6 +805,8 @@ sLISTsp:    .ascii "     \0\0"
 sLISThead:	.ascii "File Name        Cluster  File Size\0\0"
 sINPUTerr:	.ascii "Input error.\r\n\0\0"
 sDSKRDerr:	.ascii "Unknown disk read error.\r\n\0\0"
+sDSKRdToErr: .ascii "Timeout waiting for disk.\r\n\0\0"
+sDSKRDend:  .ascii "Disk read complete.\r\n\0\0"
 
 sDSKerr7:	.ascii "Bad block in requested disk sector.\r\n\0\0"
 sDSKerr6:	.ascii "Uncorrectable data error in disk.\r\n\0\0"
@@ -546,112 +817,11 @@ sDSKerr2:	.ascii "Disk command aborted.\r\n\0\0"
 sDSKerr1:	.ascii "Disk track 0 not found.\r\n\0\0"
 sDSKerr0:	.ascii "Disk data address mark not found.\r\n\0\0"
 
-    .even
+sUsectRd:   .ascii "Reading Sector: \0\0"
+sUsectErr1: .ascii "Sector read was not successful.\r\n\0\0"
+sUsectErr2: .ascii "Timed out reading from disk.\r\n\0\0"
 
-| user command to check for disk presence
-ucCHKD:
-    movem.l %a0/%a4/%d0,%sp@-      | save working registers
-    bsr     dskChk              | check for disk presence
-    cmp.b   #0,%d0               | check if disk was found
-    bne     .ucCHKD1            | branch if disk found
-    lea     %pc@(sCHKDn),%a4       | load pointer to no disk found string
-    bra     .ucCHKD2            | jump to end of subroutine
-.ucCHKD1:
-    lea     %pc@(sCHKDy),%a4       | load pointer to disk found string
-.ucCHKD2:
-    callSYS trapPutString      | print string
-    movem.l %sp@+,%a0/%a4/%d0      | restore working registers
-    rts                         | and return
-
-| user command to print disk sector contents to console
-ucSECT:
-    movem.l %a0-%a1/%a4/%d0-%d3/%d7,%sp@- | save working registers
-    callSYS  trapGetParam      | system call to fetch parameter 
-    tst.b   %d7                  | test for input error
-    bne     .ucSECTerr1         | if error, then exit
-    move.l  %d0,%a0               | A0 points to sector to read
-    lea     DATA,%a1
-    lea     %a1@(dskBUF),%a1       | A1 points to disk buffer region of memory
-    bsr     dskRdSect           | read selected disk sector
-    cmp.b   #1,%d0               | check if sector read was successful
-    bne     .ucSECTerr2         | if error, then exit
-    move.l  %a0,%d3               | get sector number
-    clr.B   %d2                  | clear line count
-.ucSECT1:
-    clr.b   %d1                  | clear word count
-    callSYS trapNewLine        | system call to print newline
-.ucSECT2:
-    move.L  %d3,%d0               | copy sector to working register
-    lsl.L   #1,%d0               | left shift sector by 1 to get base address
-    btst    #4,%d2               | check if we are in second half of buffer
-    beq     .ucSECT3            | if no, then skip ahead
-    ori.l   #1,%d0               | if second half, then set low bit of base address
-.ucSECT3:
-    callSYS trapPutHexLong     | print base address
-    move.b  %d2,%d0               | copy line count to working directory
-    lsl.B   #4,%d0               | shift by 4 to get low byte of address
-    callSYS trapPutHexByte     | print low byte of base address
-.ucSECT4:
-    callSYS trapPutSpace       | print a space
-    move.w  %a1@+,%d0            | get a word from buffer
-    callSYS trapPutHexWord     | print word from buffer
-    addi.b  #1,%d1               | increment word counter
-    cmp.B   #8,%d1               | check for end of line
-    bne     .ucSECT4            | continue line
-    addi.B  #1,%d2               | increment line counter
-    cmp.B   #0x20,%d2             | check for end of buffer
-    bne     .ucSECT1            | start new line
-.ucSECTend:
-    movem.l %sp@+,%a0-%a1/%a4/%d0-%d3/%d7 | restore working registers
-    rts                         | and return
-.ucSECTerr1:
-    lea     %pc@(sINPUTerr),%a4    | load pointer to input error string
-    callSYS trapPutString      | and print
-    bra     .ucSECTend          | jump to end
-.ucSECTerr2:
-    lea     %pc@(sDSKRDerr),%a4    | load pointer to disk read error string
-    callSYS trapPutString      | and print
-    bra     .ucSECTend          | jump to end
-
-| load sector 0 from disk and execute if successful
-| try to gracefully handle exiting programs that return here
-ucBOOT:
-    movem.l %a0-%a1/%a4/%d0,%sp@-   | save working registers
-    move.l  #0,%a0               | load sector 0
-    lea     dskBUF,%a1           | get pointer to disk buffer
-    bsr     dskRdSect           | read sector
-    cmp.b   #0,%d0               | check return status
-    beq.S   ucBOOTerr1          | there was a read error
-    lea     dskBUF,%a1           | restore that pointer to disk buffer
-    move.w  %a1@(ofsKEY),%d0       | get FAT signature
-    cmp.w   #0x55AA,%d0           | check FAT signature
-    bne.s   ucBOOTerr2          | unknown disk format error
-    pea     %pc@(ucBOOTret)       | push return address
-    jmp     %a1@(ofsBTS)          | jump to bootstrap code
-ucBOOTret:
-    lea     %pc@(sBOOTret),%a4     | get pointer to program exit string
-ucBOOTend:
-    callSYS trapPutString      | print string
-    movem.l %sp@+,%a0-%a1/%a4/%d0   | restore working registers
-    rts                         | return to monitor
-
-ucBOOTerr1:                     | disk read error
-    lea     %pc@(sDSKRDerr),%a4    | disk read error string
-    bra     ucBOOTend           | print string & exit
-
-ucBOOTerr2:                     | not a FAT-formatted disk
-    lea     %pc@(sDSKFmtErr),%a4   | disk format error string
-    bra     ucBOOTend           | print string & exit
-
-sDSKFmtErr: .ascii "Unknown disk format.\r\n\0\0"
-sBOOTret:   .ascii "\r\n\r\nProgram Exited.\r\n\0\0"
+sBOOTret:   .ascii "\r\n\r\nProgram Exited\r\n\0\0"
 
     .even
 
-| read one sector from disk
-| PARAMETERS:
-|   A0 - LBA
-|   A1 - read buffer
-| RETURNS:
-|   D0 - 1: success| 0: error
-|dskRdSect:

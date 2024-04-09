@@ -1,0 +1,39 @@
+10 PRINT "Setting LBA Address"
+20 POKE $8020000C,$40
+21 POKE $8020000A,0
+22 POKE $80200008,0
+23 POKE $80200006,0
+30 PRINT "Setting transfer size to 1 sector"
+40 POKE $80200004,1
+50 PRINT "Sending read sector command"
+60 POKE $8020000E,$21
+
+70 PRINT "Reading sector to buffer at address: ";
+80 B=$7D0
+81 PRINT HEX$(B)
+82 E=1
+90 FOR X=1 TO 256
+100 DO
+110 A=PEEK($8020000E)
+111 E=E+1
+112 IF E = 500 THEN GOTO 1000
+120 LOOP WHILE A AND $80
+130 IF A AND $01 THEN GOTO 1010
+140 C=DEEK($80200000)
+150 PRINT X;
+151 PRINT ": Read byte: ";
+152 PRINT HEX$(C);
+153 PRINT " - Writing to address: ";
+154 PRINT HEX$(B)
+160 DOKE B,C
+161 B=B+2
+170 NEXT X
+180 PRINT "Done."
+190 PRINT "Last word read: ";
+191 PRINT HEX$(DEEK(B-2))
+200 END
+
+1000 PRINT "Read timeout error"
+1001 END
+1010 PRINT "Disk reported error"
+1011 END

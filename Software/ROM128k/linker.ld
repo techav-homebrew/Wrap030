@@ -21,12 +21,34 @@ vidReg   = vidBase + 0xFFFF;
 overlayPort = 0x00300000;
 romTop   = 0x0021FFFF;
 
+ideBase             = 0x80200000;
+ideCommand          = ideBase + 0x0000;
+ideControl          = ideBase + 0x2000;
+ideDataRW           = ideCommand + 0x0;
+ideErrorRO          = ideCommand + 0x2;
+ideFeatureWO        = ideCommand + 0x2;
+ideSectorCountRW    = ideCommand + 0x4;
+ideLBALLRW          = ideCommand + 0x6;
+ideLBALHRW          = ideCommand + 0x8;
+ideLBAHLRW          = ideCommand + 0xA;
+ideLBAHHRW          = ideCommand + 0xC;
+ideStatusRO         = ideCommand + 0xE;
+ideCommandWO        = ideCommand + 0xE;
+ideAltStatusRO      = ideControl + 0xC;
+ideDevControlWO     = ideControl + 0xC;
+ideDevAddressRO     = ideControl + 0xE;
+
+
 ENTRY(_start)
 SECTIONS {
-    .tsmon :
+    .tsmon 0x00200000 :
     {
         tsmon.o ( text )
         exprom.o( text )
+        *( .text )
+        /* I don't actually need this section
+        *( .comment )
+        */
     } > rom = 0xff
     .null (NOLOAD) :
     {
@@ -52,6 +74,10 @@ SECTIONS {
         HEAPBASIC = . ;
         ram_addr = . ;
     } > ram
+    /DISCARD/ :
+    {
+        *( .comment )
+    }
 }
 
 SIZBASIC = .basicEnd - .basicStart ;

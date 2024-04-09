@@ -1,0 +1,31 @@
+10 PRINT "Initializing ..."
+20 POKE $8020000C,$40
+21 POKE $8020000A,0
+22 POKE $80200008,0
+23 POKE $80200006,0
+24 POKE $80200004,1
+25 POKE $8020000E,$21
+
+30 REM "B=buffer, E=errCount. A=ideStatus, C=readByte, X=loopCounter"
+40 B=$7D0
+41 E=1
+49 PRINT "Reading boot sector ..."
+50 FOR X=1 TO 256
+60 DO
+61 A=PEEK($8020000E)
+62 E=E+1
+63 IF E >= 500 THEN GOTO 1000
+64 LOOP WHILE A AND $80
+70 IF A AND $01 THEN GOTO 1010
+80 C=DEEK($80200000)
+90 DOKE B,C
+91 B=B+2
+100 NEXT X
+110 PRINT "Read complete. Starting ..."
+120 CALL $7D0
+130 END
+
+1000 PRINT "Read timeout error"
+1001 END
+1010 PRINT "Disk reported error"
+1011 END

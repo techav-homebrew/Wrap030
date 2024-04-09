@@ -18,6 +18,7 @@
         .global UTAB
         .global CN_IVEC
         .global CN_OVEC
+        .global STACK_SAVE
         .global TSK_T
         .global BP_TAB
         .global BUFFER
@@ -46,6 +47,7 @@ U_CASE:             DS.B 1             | Flag for uppercase conversion
 UTAB:               DS.L 1             | Pointer to user command table
 CN_IVEC:            DS.L 1             | Pointer to console input DCB
 CN_OVEC:            DS.L 1             | Pointer to console output DCB
+STACK_SAVE:         DS.L 1             | Hold stack pointer when running user program
 TSK_T:              DS.W 37            | Frame for D0-D7,A0-A6,USP,SSP,SW,PC
 BP_TAB:             DS.W 24            | Breakpoint table
 FIRST:              DS.B 512           | DCB area
@@ -699,8 +701,7 @@ TM:                                    |
         ORI.B #0x40,%d0                  | Force RTS* high to re-route data
         MOVE.B %d0,ACIA_1
         MOVEM.L %a7@+,%d0
-
-        ADD.B #1,%a6@(ECHO)              | Turn off character echo
+        ADD.B #1,%a6@(ECHO)                     | Turn off character echo
 TM1:
         BSR GETCHAR                    | Get character
         CMP.B #ESC,%d0                  | Test for end of TM mode
@@ -1367,11 +1368,22 @@ REG_MD5:
 
 | ***************************************************************************
 
-X_UN:                                  | Uninitialized exception vector routine
-        LEA %pc@(ERMES6),%a4              | Point to error message
-        BSR PSTRING                    | Display it
-        BSR EX_DIS                     | Display registers
-        BRA WARM                       | Abort
+X_UN:                                       | Uninitialized exception vector routine
+        bsr     EX_DIS                      | display register before we change any
+        LEA     %pc@(ERMES6),%a4            | Point to error message
+        BSR     PSTRING                     | Display it
+        | get the exception number from the stack frame
+        | then load the string with the name of that exception
+        eor.l   %d0,%d0                     | clear D0
+        move.w  %sp@(6),%d0                 | get vector offset from stack frame
+        andi.w  #0x0fff,%d0                 | mask off frame type from offset
+        lea     tblVecStr,%a4               | get string pointer table address
+        add.l   %d0,%a4                     | add vector offset to pointer
+        move.l  %a4@,%a4                    | get string pointer
+        bsr     PSTRING                     | print exception string
+
+|        BSR     EX_DIS                      | Display registers
+        BRA     WARM                        | Abort
 
 | ***************************************************************************
 
@@ -1523,3 +1535,115 @@ DCB6:
 |           |-----------------------| --
 | 18+S ->   | Pointer to next DCB   |
 
+| *****************************************************************************
+| techav - 20230521
+| expanding the uninitialized exception handler to be a little more helpful by
+| giving a name to the exception that was encountered.
+
+| start with the strings of all of the exception names
+strVecGeneric:  .ascii  "Generic Interrupt\r\n\0"
+strVecZeroDiv:  .ascii  "Divide by Zero\r\n\0"
+strVecCHK:      .ascii  "CHK/CHK2 Instruction\r\n\0"
+strVecTrapV:    .ascii  "TRAP Instruction\r\n\0"
+strVecPriv:     .ascii  "Privilege Violation\r\n\0"
+strVecTrace:    .ascii  "Trace\r\n\0"
+strVecATrap:    .ascii  "$A-Line Instruction Trap\r\n\0"
+strVecFTrap:    .ascii  "$F-Line Instruction Trap\r\n\0"
+strVecCprcViol: .ascii  "Coprocessor Protocol Violation\r\n\0"
+strVecFormat:   .ascii  "Format Error\r\n\0"
+strVecUninit:   .ascii  "Uninitialized Interrupt\r\n\0"
+strVecSpur:     .ascii  "Spurious Interrupt\r\n\0"
+strVecInt1:     .ascii  "AVEC Level 1\r\n\0"
+strVecInt2:     .ascii  "AVEC Level 2\r\n\0"
+strVecInt3:     .ascii  "AVEC Level 3\r\n\0"
+strVecInt4:     .ascii  "AVEC Level 4\r\n\0"
+strVecInt5:     .ascii  "AVEC Level 5\r\n\0"
+strVecInt6:     .ascii  "AVEC Level 6\r\n\0"
+strVecInt7:     .ascii  "AVEC Level 7\r\n\0"
+strVecTrap1:    .ascii  "Trap 0 Instruction\r\n\0"
+strVecTrap2:    .ascii  "Trap 1 Instruction\r\n\0"
+strVecTrap3:    .ascii  "Trap 3 Instruction\r\n\0"
+strVecTrap4:    .ascii  "Trap 4 Instruction\r\n\0"
+strVecTrap5:    .ascii  "Trap 5 Instruction\r\n\0"
+strVecTrap6:    .ascii  "Trap 6 Instruction\r\n\0"
+strVecTrap7:    .ascii  "Trap 7 Instruction\r\n\0"
+strVecTrap8:    .ascii  "Trap 8 Instruction\r\n\0"
+strVecTrap9:    .ascii  "Trap 9 Instruction\r\n\0"
+strVecTrapA:    .ascii  "Trap 10 Instruction\r\n\0"
+strVecTrapB:    .ascii  "Trap 11 Instruction\r\n\0"
+strVecTrapC:    .ascii  "Trap 12 Instruction\r\n\0"
+strVecTrapD:    .ascii  "Trap 13 Instruction\r\n\0"
+strVecFPUunord: .ascii  "FPU Unordered Condition\r\n\0"
+strVecFPUinxct: .ascii  "FPU Inexact Result\r\n\0"
+strVecFPUdiv0:  .ascii  "FPU Divide by Zero\r\n\0"
+strVecFPUunder: .ascii  "FPU Underflow\r\n\0"
+strVecFPUopErr: .ascii  "FPU Operand Error\r\n\0"
+strVecFPUover:  .ascii  "FPU Overflow\r\n\0"
+strVecFPUnan:   .ascii  "FPU Not a Number\r\n\0"
+strVecMMUcnfg:  .ascii  "MMU Configuration Error\r\n\0"
+strVec68851:    .ascii  "MC68851 MMU Error\r\n\0"
+
+| now build a table of the string pointers for each vector
+tblVecStr:
+    dc.l    strVecGeneric   | initial stack pointer
+    dc.l    strVecGeneric   | initial program counter
+    dc.l    strVecGeneric   | bus error
+    dc.l    strVecGeneric   | address error
+    dc.l    strVecGeneric   | illegal instruction
+    dc.l    strVecZeroDiv   
+    dc.l    strVecCHK
+    dc.l    strVecTrapV
+    dc.l    strVecPriv
+    dc.l    strVecTrace
+    dc.l    strVecATrap
+    dc.l    strVecFTrap
+    dc.l    strVecGeneric
+    dc.l    strVecCprcViol
+    dc.l    strVecFormat
+    dc.l    strVecUninit
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecGeneric
+    dc.l    strVecSpur
+    dc.l    strVecInt1
+    dc.l    strVecInt2
+    dc.l    strVecInt3
+    dc.l    strVecInt4
+    dc.l    strVecInt5
+    dc.l    strVecInt6
+    dc.l    strVecInt7
+    dc.l    strVecGeneric   | Trap0 handled elsewhere
+    dc.l    strVecTrap1
+    dc.l    strVecTrap2
+    dc.l    strVecTrap3
+    dc.l    strVecTrap4
+    dc.l    strVecTrap5
+    dc.l    strVecTrap6
+    dc.l    strVecTrap7
+    dc.l    strVecTrap8
+    dc.l    strVecTrap9
+    dc.l    strVecTrapA
+    dc.l    strVecTrapB
+    dc.l    strVecTrapC
+    dc.l    strVecTrapD
+    dc.l    strVecGeneric   | Trap14 handled elsewhere
+    dc.l    strVecGeneric   | Trap15 handled elsewhere
+    dc.l    strVecFPUunord
+    dc.l    strVecFPUinxct
+    dc.l    strVecFPUdiv0
+    dc.l    strVecFPUunder
+    dc.l    strVecFPUopErr
+    dc.l    strVecFPUover
+    dc.l    strVecFPUnan
+    dc.l    strVecGeneric
+    dc.l    strVecMMUcnfg
+    dc.l    strVec68851
+    dc.l    strVec68851
+
+
+    

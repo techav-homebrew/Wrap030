@@ -70,7 +70,8 @@ else:
             break
         else:
             print("Unknown sector " + str(x) + " status: " + sectStatus.decode("utf-8"))
-            continue
+            needsErase = 1
+            break
 
 if needsErase == 1 and checkErase == 1:
     print("Attempting to erase chip...")
