@@ -15,6 +15,34 @@
 |    .equ HEAPBASIC, RAMBASIC+0x4000 | above BASIC program in RAM
 |    .equ SIZBASIC, 0x4000            | total size of BASIC to copy from ROM (~16kB)
 
+|;***************************************************************************
+|; global variables (BSS section) in memory
+    .section bss,"w"
+
+    |; some global variables for holding boot sector data for easy reference
+    |; these are all reserved as longwords to make it easier to load them for
+    |; the kind of maths we'll need to do with them later
+globFat:                                    |; use to init a ptr to this table
+    |; these are from the boot block itself
+globFatValid:               ds.l    1       |; set to 0xAA55 when table loaded
+globFatBpbBytesPerSect:     ds.l    1       |; word
+globFatBpbSectPerClust:     ds.l    1       |; byte
+globFatBpbReservedSects:    ds.l    1       |; word
+globFatBpbNumFats:          ds.l    1       |; byte
+globFatBpbRootDirEntries:   ds.l    1       |; word
+globFatBpbTotalSectors:     ds.l    1       |; long
+globFatBpbSectPerFat:       ds.l    1       |; word
+globFatBpbSectPerTrack:     ds.l    1       |; word
+globFatBpbNumHiddenSect:    ds.l    1       |; long
+    |; these are calculated, but used frequently
+globFatRootDirLBA:          ds.l    1       |; SectPerFat*NumFats+ReservedSects
+globFatRootDirSize:         ds.l    1       |; RootDirEntries*32
+globFatDataStartLBA:        ds.l    1       |; RootDirLBA+((RootDirSize+511)>>9)
+globFatFATsizeInSects:             ds.l    1       |; SectPerFat+ReservedSects
+
+
+
+
 |******************************************************************************
 | HEADER & INITIALIZATION
 |******************************************************************************
@@ -60,30 +88,47 @@ UCOM:
     DC.B	4,4
     .ascii "HELP"
     DC.L	ucHELP
+
     DC.B	6,3
     .ascii "BASIC "
     DC.L	ucLoadBasic
+
     DC.B    8,3
     .ascii "CENABLE "
     DC.L    ucCEnable
+
     DC.B    8,4
     .ascii "CDISABLE"
     DC.L    ucCDisable
+
     DC.b    4,4
     .ascii "CHKD"
     DC.l    ucCHKD
+
     DC.B    6,4
     .ascii "SECTOR"
     dc.L    ucSECT
+
     dc.B    6,3
     .ascii "FPUCHK"
     dc.L    ucFPUCHK
-    dc.B    4,4
-    .ascii "BOOT"
+
+    dc.B    8,5
+    .ascii "BOOTRAW "
     dc.L    ucBOOT
+
+    dc.b    8,5
+    .ascii  "BOOTFILE"
+    dc.l    ucBOOTFILE
+
+    dc.b    8,3
+    .ascii  "EXECUTE "
+    dc.l    ucEXECFILE
+
     dc.b    6,4
     .ascii  "DSKRST"
     dc.l    ucDRST
+
     DC.B	0,0
 |;String Constants
 sBNR:	.ascii "Initializing ROM 2\0\0"
@@ -257,7 +302,8 @@ sHELP2:
     .ascii "CHKD                           - Check if disk inserted\r\n"
     .ascii "SECTor <ADDRESS>               - Print disk sector contents\r\n"
     .ascii "FPUchk                         - Check if FPU is installed\r\n"
-    .ascii "BOOT                           - Execute boot block from disk\r\n"
+    .ascii "BOOTRaw                        - Execute boot block from disk\r\n"
+    .ascii "BOOTFile                       - Run \"BOOT.BIN\" from FAT16 Disk\r\n"
     .ascii "DSKRST                         - Reset IDE disk\r\n"
     DC.B	0,0
 
@@ -486,7 +532,7 @@ sCDIS:
     .even
 
 |******************************************************************************
-| IDE+FAT DISK FUNCTIONS
+| IDE DISK FUNCTIONS
 |******************************************************************************
 |;    .include    "ide.s"
 
@@ -510,18 +556,19 @@ ideCheck:
 |;  d0.l    0: error | 512: success
 ideReadSect:
     movem.l %a0-%a2/%d1-%d4,%sp@-
-    bsr     cacheDisable                    |; disable cache before reading disk
+    |;bsr     cacheDisable                    |; disable cache before reading disk
+
     |; debug print stuff
-    movem.l %a0/%d0,%sp@-                   |; save parameters
-    sysPrnt sReadSectSectHead
-    move.l  %sp@(0),%d0
-    callSYS trapPutHexLong
-    callSYS trapNewLine
-    sysPrnt sReadSectBufHead
-    move.l  %sp@(4),%d0
-    callSYS trapPutHexLong
-    callSYS trapNewLine
-    movem.l %sp@+,%a0/%d0                   |; restore parameters
+    |; movem.l %a0/%d0,%sp@-                   |; save parameters
+    |; sysPrntI "ideReadSect: Sector: "
+    |; move.l  %sp@(0),%d0
+    |; callSYS trapPutHexLong
+    |; sysPrntI "; Buffer: "
+    |; move.l  %sp@(4),%d0
+    |; callSYS trapPutHexLong
+    |; callSYS trapNewLine
+    |; movem.l %sp@+,%a0/%d0                   |; restore parameters
+    |; end debug print stuff
 
     |; initialize read sector command
     move.l  %d0,%d1                         |; copy LBA to work with it
@@ -531,41 +578,28 @@ ideReadSect:
     move.b  %d1,%a1@                        |; send first byte of LBA
     ror.l   #8,%d1                          |; shift in next byte
     lea     ideLBALHRW,%a1                  |; get next LBA reg pointer
-    nop                                     |; enforce IDE PIO 0 cycle timing
-    nop
     move.b  %d1,%a1@
     ror.l   #8,%d1
     lea     ideLBAHLRW,%a1
-    nop
-    nop
     move.b  %d1,%a1@
     ror.l   #8,%d1
     lea     ideLBAHHRW,%a1
-    nop
-    nop
     move.b  %d1,%a1@
     lea     ideSectorCountRW,%a1            |; get sector count reg pointer
-    nop                                     |; enforce IDE cycle timing
-    nop
-    nop
     move.b  #1,%a1@                         |; set transfer size to 1 sector
     lea     ideCommandWO,%a1                |; get command reg pointer
-    nop                                     |; enforce IDE cycle timing
-    nop
-    nop
     move.b  #0x20,%a1@                      |; send read command
 
     |; wait for disk not busy, ready, & data ready
     |; debug print stuff
     movem.l %a0/%d0,%sp@-                   |; save parameters
-    sysPrnt sReadSectWaitReady
-    callSYS trapNewLine
+    |; sysPrntI "ideReadSect: Waiting for disk ... \r\n"
     movem.l %sp@+,%a0/%d0                   |; restore parameters
 
     lea     ideStatusRO,%a1                 |; get pointer to status
     lea     ideDataRW,%a2                   |; get pointer to IDE data port
 .ideReadSectLp1Setup:
-    move.l  #0x000007ff,%d2                 |; set up wait limit
+    move.l  #0x00007fff,%d2                 |; set up wait limit
 .ideReadSectLp1:
     move.b  %a1@,%d1                        |; check status
     btst.b  #7,%d1                          |; check busy bit
@@ -591,44 +625,71 @@ ideReadSect:
     dbra    %d3,.ideReadSectReadLp          |; loop until entire sector read
 
 .ideReadSectDone:
-    sysPrnt sReadSectDone
-    callSYS trapNewLine
+    |; sysPrntI "ideReadSect: Disk sector read complete.\r\n"
     move.l  #512,%d0                        |; set success
 
 .ideReadSectEnd:                            |; clean up and return
-    bsr     cacheEnable                     |; re-enable cache
+    |;bsr     cacheEnable                     |; re-enable cache
     movem.l %sp@+,%a0-%a2/%d1-%d4           |; restore registers
     rts
 
 .ideReadSectLp1Expired:
-    move.l  %d1,%sp@-                       |; save status byte
-    sysPrnt sReadSectTimeout
-    move.l  %sp@+,%d0                       |; retrieve status byte
-    callSYS trapPutHexByte
-    callSYS trapNewLine
-.ideReadSectPrintErrByte:
-    sysPrnt sReadSectErrorByte
-    lea     ideErrorRO,%a1                  |; get pointer to error reg
-    move.b  %a1@,%d0
-    callSYS trapPutHexByte
-    callSYS trapNewLine
+    sysPrntIreg "ideReadSect: Timeout waiting for disk. Status: " %d1
     moveq.l #0,%d0                          |; return 0 on error
     bra     .ideReadSectEnd                 |; end 
 
-.ideReadSectErrorSet:                       |; print header for disk error
-    sysPrnt sReadSectErrorHead
-    callSYS trapNewLine
-    bra     .ideReadSectPrintErrByte        |; then print error byte & end
-
-sReadSectSectHead:  .ascii  "Reading sector: \0\0"
-sReadSectBufHead:   .ascii  "Using buffer: \0\0"
-sReadSectWaitReady: .ascii  "Waiting for disk ... \0\0"
-sReadSectTimeout:   .ascii  "Timeout waiting for disk. Status byte: \0\0"
-sReadSectErrorByte: .ascii  "Disk error byte: \0\0"
-sReadSectErrorHead: .ascii  "Disk reported error: \0\0"
-sReadSectDone:      .ascii  "Disk read complete.\0\0"
+.ideReadSectErrorSet:
+    move.b  ideErrorRO,%d0
+    sysPrntIreg "ideReadSect: Disk reported error: " %d0
+    moveq.l #0,%d0                          |; return 0 on error
+    bra     .ideReadSectEnd                 |; end 
 
     .even
+
+|; read multiple disk sectors
+|; parameters:
+|;  d0.l:   LBA
+|;  d1.l:   number of sectors to read
+|;  a0.l:   buffer pointer
+|; returns:
+|;  d0.l    0: error | bytes read: success
+ideReadSectMult:
+    |; debug print
+    movem.l %a0/%d0-%d1,%sp@-
+    exg     %d0,%d1                         |; swap param registers
+    sysPrntI "ideReadSectMult: Reading "
+    callSYS  trapPutHexLong
+    exg     %d0,%d1                         |; swap them back
+    sysPrntIreg " sectors starting at LBA: " %d0
+    movem.l %sp@+,%a0/%d0-%d1
+    |; end debug print
+    movem.l %a0/%d1-%d3,%sp@-               |; save working registers
+    eor.l   %d3,%d3                         |; clear byte count register
+    move.l  %d0,%d2                         |; save initial LBA
+.ideReadMultLp:
+    subq.l  #1,%d1                          |; decrement counter
+    cmp.l   #0,%d1                          |; check for end of loop
+    beq     .ideReadMultEnd                 |; exit loop when done
+    bsr     ideReadSect                     |; read a sector of data
+    tst.l   %d0                             |; check for read error
+    beq     .ideReadMultReadErr             |; exit on error
+    add.l   %d0,%d3                         |; increment byte count
+    add.l   %d0,%a0                         |; increment pointer
+    addq.l  #1,%d2                          |; increment LBA
+    move.l  %d2,%d0                         |; get LBA ready for next read
+    bra     .ideReadMultLp                  |; continue loop
+.ideReadMultEnd:
+    sysPrntIreg "ideReadSectMult: Done reading from disk. Total bytes read: " %d3
+    move.l  %d3,%d0                         |; set return value
+.ideReadMultExit:
+    movem.l %sp@+,%a0/%d1-%d3               |; restore registers
+    rts
+
+.ideReadMultReadErr:
+    sysPrntI "ideReadSectMult: Error reading multiple disk sectors.\r\n"
+    eor.l   %d0,%d0                         |; return 0 on error
+    bra     .ideReadMultExit                |; jump to end
+
 
 |; user command to check for disk presence
 ucCHKD:
@@ -748,80 +809,764 @@ ucBOOT:
 
 sBootStart: .ascii  "Booting from disk ...\r\n\0\0"
 sBootErr:   .ascii  "Error reading disk boot sector.\0\0"
-    .even
-
-|; check disk error and print helpful message
-|; PARAMETERS
-|;   D0 - IDE error register
-dskErr:
-    btst    #7,%d0
-    bne     .dskErr6
-    lea     %pc@(sDSKerr7),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr6:
-    btst    #6,%d0
-    bne     .dskErr5
-    lea     %pc@(sDSKerr6),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr5:
-    btst    #5,%d0
-    bne     .dskErr4
-    lea     %pc@(sDSKerr5),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr4:
-    btst    #4,%d0
-    bne     .dskErr3
-    lea     %pc@(sDSKerr4),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr3:
-    btst    #3,%d0
-    bne     .dskErr2
-    lea     %pc@(sDSKerr3),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr2:
-    btst    #2,%d0
-    bne     .dskErr1
-    lea     %pc@(sDSKerr2),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr1:
-    btst    #1,%d0
-    bne     .dskErr0
-    lea     %pc@(sDSKerr1),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErr0:
-    btst    #0,%d0
-    bne     .dskErrN
-    lea     %pc@(sDSKerr0),%a4              | get address of error message
-    bra     .dskErrEnd                      | and jump to end
-.dskErrN:
-    lea     %pc@(sDSKRDerr),%a4
-.dskErrEnd:
-    callSYS trapPutString                   | print selected error message
-    rts                                     | and return
-
-sCHKDy:	    .ascii "Disk found.\r\n\0\0"
-sCHKDn:	    .ascii "No disk inserted.\r\n\0\0"
-sLISTsp:    .ascii "     \0\0"
-sLISThead:	.ascii "File Name        Cluster  File Size\0\0"
 sINPUTerr:	.ascii "Input error.\r\n\0\0"
 sDSKRDerr:	.ascii "Unknown disk read error.\r\n\0\0"
-sDSKRdToErr: .ascii "Timeout waiting for disk.\r\n\0\0"
-sDSKRDend:  .ascii "Disk read complete.\r\n\0\0"
-
-sDSKerr7:	.ascii "Bad block in requested disk sector.\r\n\0\0"
-sDSKerr6:	.ascii "Uncorrectable data error in disk.\r\n\0\0"
-sDSKerr3:
-sDSKerr5:	.ascii "Unspecified Removable Media error.\r\n\0\0"
-sDSKerr4:	.ascii "Requested disk sector could not be found.\r\n\0\0"
-sDSKerr2:	.ascii "Disk command aborted.\r\n\0\0"
-sDSKerr1:	.ascii "Disk track 0 not found.\r\n\0\0"
-sDSKerr0:	.ascii "Disk data address mark not found.\r\n\0\0"
-
-sUsectRd:   .ascii "Reading Sector: \0\0"
-sUsectErr1: .ascii "Sector read was not successful.\r\n\0\0"
-sUsectErr2: .ascii "Timed out reading from disk.\r\n\0\0"
-
-sBOOTret:   .ascii "\r\n\r\nProgram Exited\r\n\0\0"
+    .even
 
     .even
+
+
+|;*****************************************************************************
+|; UTILITY FUNCTIONS
+|;*****************************************************************************
+
+|; Memory Compare
+|; Compares two blocks of memory to see if they match
+|;  Parameters:
+|;      %a0.l   pointer to memory block 1
+|;      %a1.l   pointer to memory block 2
+|;      %d0.l   number of bytes to compare
+|;  Returns:
+|;      %d0.l   0: match
+memCmp:
+    movem.l %a0-%a1/%d1,%sp@-               |; save the pointers
+    cmp.l   #0,%d0                          |; if count is 0, then return
+    beq.s   .memCmpYes                      |;
+    subq.l  #1,%d0                          |; pre-decr counter so no overflow
+.memCmpLp:
+    cmp.l   #0,%d0                          |; check for end of loop
+    beq.s   .memCmpYes                      |; jump to end if done
+    move.b  %a0@+,%d1                       |; get first byte, incr ptr
+    cmp.b   %a1@+,%d1                       |; compare 2nd byte, incr ptr
+    bne.s   .memCmpNo                       |; end loop if no match
+    subq.l  #1,%d0                          |; decrement byte counter
+    bra.s   .memCmpLp
+
+.memCmpYes:
+    moveq.l #0,%d0                          |; return 0 for match
+    movem.l %sp@+,%a0-%a1/%d1               |; restore registers
+    rts
+
+.memCmpNo:
+    |; debug print
+    |; sysPrntI "memCmp: Mismatch at: "
+    |; callSYS trapPutHexLong
+    |; sysPrntI "; Pointer 1: "
+    |; move.l  %a0,%d0
+    |; callSYS trapPutHexLong
+    |; sysPrntI "; Pointer 2: "
+    |; move.l  %a1,%d0
+    |; callSYS trapPutHexLong
+    |; callSYS trapNewLine
+    |; end debug print
+
+    move.l  %a0@,%d0                        |; return difference
+    sub.l   %a1@,%d0                        |; between nonmatching values
+    movem.l %sp@+,%a0-%a1/%d1               |; restore registers
+    rts
+
+
+
+|;*****************************************************************************
+|; FAT16 TRAVERSING
+|;*****************************************************************************
+
+|; structure of the boot block
+    .equ    fatBpbJmp,               0
+    .equ    fatBpbOem,               3
+    .equ    fatBpbBytesPerSect,     11
+    .equ    fatBpbSectPerClust,     13
+    .equ    fatBpbResvSect,         14
+    .equ    fatBpbNumFats,          16
+    .equ    fatBpbRootDirEntries,   17
+    .equ    fatBpbTotalSectors16,   19
+    .equ    fatBpbMediaDesc,        21
+    .equ    fatBpbSectPerFat,       22
+    .equ    fatBpbSectPerTrack,     24
+    .equ    fatBpbNumHeads,         26
+    .equ    fatBpbNumHiddenSect,    28
+    .equ    fatBpbTotalSectors32,   32
+    .equ    fatBpbDriveNum,         36
+    .equ    fatBpbReserved,         37
+    .equ    fatBpbSignature,        38
+    .equ    fatBpbVolumeID,         39
+    .equ    fatBpbVolumeLabel,      43
+    .equ    fatBpbSysIdStr,         54
+    .equ    fatBpbBootLoader,       62
+    .equ    fatBpbMagicNum,        510
+
+|; structure of a root directory entry
+    .equ    fatRootFilename,         0
+    .equ    fatRootExtension,        8
+    .equ    fatRootAttribute,        9
+    .equ    fatRootStartCluster,    26
+    .equ    fatRootFilesize,        28
+
+
+|; globFat:                                    |; use to init a ptr to this table
+|;     |; these are from the boot block itself
+|; globFatValid                ds.l    1       |; set to 0xAA55 when table loaded
+|; globFatBpbBytesPerSect:     ds.l    1       |; word
+|; globFatBpbSectPerClust:     ds.l    1       |; byte
+|; globFatBpbReservedSects:    ds.l    1       |; word
+|; globFatBpbNumFats:          ds.l    1       |; byte
+|; globFatBpbRootDirEntries:   ds.l    1       |; word
+|; globFatBpbTotalSectors:     ds.l    1       |; long
+|; globFatBpbSectPerFat:       ds.l    1       |; word
+|; globFatBpbSectPerTrack:     ds.l    1       |; word
+|; globFatBpbNumHiddenSect:    ds.l    1       |; long
+|;     |; these are calculated, but used frequently
+|; globFatRootDirLBA:          ds.l    1       |; SectPerFat*NumFats+ReservedSects
+|; globFatRootDirSize:         ds.l    1       |; RootDirEntries*32
+|; globFatDataStartLBA:        ds.l    1       |; RootDirLBA+((RootDirSize+511)>>9)
+|; globFatFATsizeInSects:      ds.l    1       |; SectPerFat+ReservedSects
+
+
+|; parse FAT header and save to global variables for later use
+|; checks magic number and system ID string to confirm FAT16
+|;  Parameters:
+|;      %a0.l   pointer to boot block in memory
+fatParseHeader:
+    movem.l %a0-%a1/%d0-%d1,%sp@-           |; save registers
+    move.l  %a0,%sp@-                       |; save our pointer
+    sysPrntI "fatParseHeader: Parsing FAT16 filesystem header ...\r\n"
+    lea     globFat,%a2                     |; get global var ptr
+    eor.l   %d0,%d0                         |; clear regs
+    move.l  %d0,%d1                         |; 
+    move.w  %a0@(fatBpbMagicNum),%d0        |; get magic number
+    cmp.w   #0x55AA,%d0                     |; check for match
+    bne     .fatParseHeaderBadVolMag        |; no match
+    move.l  %d0,globFatValid                |; temp store in RAM
+    lea     %a0@(fatBpbSysIdStr),%a0        |; get pointer to sys id
+    lea     sFatSysId,%a1                   |; get pointer to match
+    moveq.l #8,%d0                          |; check 8 bytes
+    bsr     memCmp                          |; compare strings
+    tst     %d0                             |; check for match
+    bne     .fatParseHeaderBadVolF16        |; exit if no match
+    move.l  %sp@+,%a0                       |; restore pointer
+
+    ldWordLittle %a0, fatBpbBytesPerSect    |; 
+    move.l  %d0,globFatBpbBytesPerSect
+    sysPrntIreg "fatParseHeader: FAT Bytes per Sector: " %d0
+
+    move.l  %d1,%d0                         |; clear reg d0
+    move.b  %a0@(fatBpbSectPerClust),%d0
+    move.l  %d0,globFatBpbSectPerClust
+    sysPrntIreg "fatParseHeader: FAT Sectors per Cluster: " %d0
+
+    ldWordLittle %a0, fatBpbResvSect
+    move.l  %d0,globFatBpbReservedSects
+    sysPrntIreg "fatParseHeader: FAT Reserved Sectors: " %d0
+
+    move.l  %d1,%d0
+    move.b  %a0@(fatBpbNumFats),%d0
+    move.l  %d0,globFatBpbNumFats
+    sysPrntIreg "fatParseHeader: FAT Number of FATS: " %d0
+
+    ldWordLittle %a0, fatBpbRootDirEntries
+    move.l  %d0,globFatBpbRootDirEntries
+    sysPrntIreg "fatParseHeader: FAT Number of Root Directory Entries: " %d0
+
+    tst.w   %a0@(fatBpbTotalSectors16)
+    beq.s   .fatParseHeadTotSectLong
+    ldWordLittle %a0, fatBpbTotalSectors16
+    move.l  %d0,globFatBpbTotalSectors
+    bra     .fatParseHeadTotSectDone
+.fatParseHeadTotSectLong:
+    ldLongLittle %a0, fatBpbTotalSectors32
+    move.l  %d0,globFatBpbTotalSectors
+.fatParseHeadTotSectDone: 
+    sysPrntIreg "fatParseHeader: FAT Total Sectors: " %d0
+
+    ldWordLittle %a0, fatBpbSectPerFat
+    move.l  %d0,globFatBpbSectPerFat
+    sysPrntIreg "fatParseHeader: FAT Sectors per FAT: " %d0
+
+    ldWordLittle %a0, fatBpbSectPerTrack
+    move.l  %d0,globFatBpbSectPerTrack
+    sysPrntIreg "fatParseHeader: FAT Sectors per Track: " %d0
+
+    ldLongLittle %a0, fatBpbNumHiddenSect
+    move.l  %d0,globFatBpbNumHiddenSect
+    sysPrntIreg "fatParseHeader: FAT Number of Hidden Sectors: " %d0
+
+    |; now move on to the values that need to be calculated
+
+    |; globFatFATsizeInSects:             SectPerFat*NumFats
+    move.l  globFatBpbSectPerFat,%d0
+    move.l  globFatBpbNumFats,%d1
+    mulu.w  %d1,%d0
+    move.l  %d0,globFatFATsizeInSects
+    sysPrntIreg "fatParseHeader: FAT Calculated Sector Size of FAT: " %d0
+
+    |; globFatRootDirLBA:          ReservedSects+FATsize
+    move.l  globFatFATsizeInSects,%d0
+    add.l   globFatBpbReservedSects,%d0
+    move.l  %d0,globFatRootDirLBA
+    sysPrntIreg "fatParseHeader: FAT Calculated LBA of Root Directory: " %d0
+
+    |; globFatRootDirSize:         RootDirEntries*32
+    move.l  globFatBpbRootDirEntries,%d0
+    lsl.l   #5,%d0
+    move.l  %d0,globFatRootDirSize
+    sysPrntIreg "fatParseHeader: FAT Calculated Root Directory Size: " %d0
+
+    |; globFatDataStartLBA:        RootDirLBA+RootDirSize
+    move.l  globFatRootDirSize,%d0          |; root dir size in bytes
+    lsr.l   #8,%d0                          |; divide by 512 to get root dir
+    lsr.l   #1,%d0                          |; root dir size in sectors
+    add.l   globFatRootDirLBA,%d0           |; add to root dir start LBA
+    move.l  %d0,globFatDataStartLBA
+    sysPrntIreg "fatParseHeader: FAT Calculated Start of Data LBA: " %d0
+
+    |; clean up and exit
+    move.l  globFatValid,%d0                |; get data valid marker
+    rol.w   #8,%d0                          |; mark header data as valid
+    move.l  %d0,globFatValid                |; save data valid marker
+
+    sysPrntI "fatParseHeader: Done.\r\n"
+
+    movem.l %sp@+,%a0-%a1/%d0-%d1           |; restore registers
+    rts
+    
+.fatParseHeaderBadVolMag:
+    sysPrntIreg "fatParseHeader: Bad magic number: " %d0
+    bra     .fatParseHeaderBadVol
+.fatParseHeaderBadVolF16:
+    sysPrntIreg "fatParseHeader: Bad system ID. Pointer: " %a0
+.fatParseHeaderBadVol:
+    addq.l  #4,%sp                          |; remove ptr from stack
+    move.l  #0,globFatValid                 |; clear valid word
+    sysPrnt sFatBadVol                      |; print error
+    callSYS trapNewLine
+    movem.l %sp@+,%a0-%a1/%d0-%d1           |; restore registers
+    rts
+
+sFatBadVol:             .ascii  "Unknown disk format\0"
+sFatSysId:              .ascii  "FAT16   \0"
+    .even
+
+
+|; read FAT header block, and parse for later user
+|;  Parameters:
+|;      --
+|;  Returns:
+|;      %d0.l   0: Success | else: error
+|;      %a0.l   pointer to dskBuf if successful, else 0
+fatReadHeader:
+
+    sysPrntI "fatReadHeader: Checking for disk ... "
+    bsr     ideCheck                        |; check if disk present
+    tst.l   %d0                             |; returns 1 if disk found
+    beq     .fatReadHeaderErrNoDisk         |; exit if no disk
+    sysPrntI "Disk found.\r\n"
+
+    sysPrntI "fatReadHeader: Reading disk header sector ... \r\n"
+    lea     dskBUF,%a0                      |; get disk buffer pointer
+    moveq.l #0,%d0                          |; get sector 0
+    bsr     ideReadSect                     |; read sector 0
+    sysPrntIreg "fatReadHeader: Reading disk header sector returned status " %d0
+    tst.l   %d0                             |; returns 0 on error
+    beq     .fatReadHeaderErrRead           |; exit if read error
+    sysPrntI "fatReadHeader: Finished reading disk header sector.\r\n"
+
+    sysPrntI "fatReadHeader: Sending disk header for parsing ... \r\n"
+    bsr     fatParseHeader                  |; parse header
+    move.l  globFatValid,%d0                |; check for valid header data
+    sysPrntIreg "fatReadHeader: Got back header: " %d0
+    cmp.w   #0xaa55,%d0                     |; compare with magic number
+    bne     .fatReadHeaderErrBadVol         |; exit if not FAT16 volume
+    sysPrntI "fatReadHeader: Disk header parsing completed successfully.\r\n"
+
+    moveq.l #0,%d0
+    rts
+
+.fatReadHeaderErrNoDisk:
+    sysPrntI "fatReadHeader: No disk found.\r\n"
+    moveq.l #1,%d0
+    movea.l #0,%a0
+    rts
+
+.fatReadHeaderErrRead:
+    sysPrntI "fatReadHeader: Error reading disk header sector.\r\n"
+    moveq.l #2,%d0
+    movea.l #0,%a0
+    rts
+
+.fatReadHeaderErrBadVol:
+    sysPrntI "fatReadHeader: Could not find FAT16 signature in disk header.\r\n"
+    moveq.l #3,%d0
+    movea.l #0,%a0
+    rts
+
+
+|; Search root directory for a file
+|; loads disk sector 0 into dskBUF and parses disk header data
+|; then loads the root directory & FATs into ram starting at RAMBASIC
+|;  Parameters:
+|;      %a0.l   pointer to filename string
+|;  Returns:
+|;      %d0.l   cluster if found | 0 on error
+|;      %d1.l   filesize if found | 0 on error
+|;      %a0.l   pointer to filesystem data if successful, else 0
+fatFindFileStart:
+    sysPrntI "fatFindFileStart: Starting file search function ...\r\n"
+    move.l  %a0,%sp@-                       |; save filename pointer
+    bsr     fatReadHeader                   |; read disk header data
+    tst.l   %d0                             |; returns 0 on success
+    bne     .fatFindFileErrHeader           |; exit on error
+
+    |; next we're going to read the entire root directory & FAT into memory
+    sysPrntI "fatFindFileStart: File system header read & parsed.\r\n"
+    sysPrntI "fatFindFileStart: Loading root directory & File Allocation Table.\r\n"
+                                            |; d0 should already be 0
+    move.l  globFatDataStartLBA,%d1         |; number of sectors to load
+    lea     RAMBASIC,%a0                    |; pointer to data buffer
+    bsr     ideReadSectMult                 |; read file system
+    tst.l   %d0                             |; returns 0 on error
+    beq     .fatFindFileErrFileSystem       |; exit on error
+
+    sysPrntI "fatFindFileStart: Directory & FAT loaded. Searching directory for file.\r\n"
+    |; a0 points to start of buffer we just loaded file system into
+    |; root directory starts at the end of the ReservedSectors & FATs region
+    |; (RootDirLBA*512)+BufferPointer
+    move.l  globFatRootDirLBA,%d0           |;
+    lsl.l   #8,%d0                          |;
+    lsl.l   #1,%d0                          |;
+    add.l   %a0,%d0                         |;
+    move.l  %d0,%a2                         |; pointer to root dir table
+
+    |; search the root directory
+    eor.l   %d2,%d2                         |; d2 is directory entry offset
+
+    move.l  globFatBpbRootDirEntries,%d3    |; number of root dir entries
+    sub.l   #1,%d3
+    eor.l   %d1,%d1                         |; d1 is loop counter
+    move.l  %d1,%d4                         |; clear d4 also
+
+    move.l  %sp@+,%a1                       |; get search filename pointer
+
+    sysPrntIreg "fatFindFileStart: Max number of directory entries:         " %d3
+    sysPrntIreg "fatFindFileStart: Directory search filename pointer:       " %a1
+    sysPrntIreg "fatFindFileStart: Directory search pointer to buffer:      " %a0
+    sysPrntIreg "fatFindFileStart: Directory search pointer to directory:   " %a2
+
+.fatFindFileStartSearchLp:
+    moveq.l #11,%d0                         |; filename+extension length
+    lea     %a2@(fatRootFilename,%d2.l),%a0 |; get pointer to entry's filename
+
+    move.b  %a0@,%d4                        |; check first byte
+
+    |; debug print
+    |; sysPrntI "fatFindFileStart: Directory entry "
+    |; exg     %d0,%d1
+    |; callSYS trapPutHexLong
+    |; exg     %d0,%d1
+    |; exg     %d0,%a0
+    |; sysPrntI " base pointer: "
+    |; callSYS trapPutHexLong
+    |; exg     %d0,%a0
+    |; sysPrntIreg "; filename first byte: " %d4
+    |; debug print
+
+    cmp.b   #0,%d4                          |; #0 is end of search and means
+    beq     .fatFindFileErrNotFound         |; the file is not here
+
+    cmp.b   #0xE5,%d4                       |; #0xE5 means this entry is free
+    beq     .fatFindFileStartSearchLpNext   |; skip to next entry
+    
+    bsr     memCmp                          |; check for filename match
+    tst.l   %d0                             |; returns 0 on success
+    beq     .fatFindFileStartFound          |; end loop if found
+
+.fatFindFileStartSearchLpNext:
+    add.l   #0x20,%d2                       |; point to next root dir entry
+    add.l   #1,%d1                          |; increment loop counter
+    |; sysPrntIreg "fatFindFileStart: Search loop: " %d1
+    cmp.l   %d1,%d3                         |; compare with limit
+    bne     .fatFindFileStartSearchLp       |; loop until max entry
+
+    |; if we've made it to here, then the file was not found
+    bra     .fatFindFileErrNotFound         |;
+
+.fatFindFileStartFound:
+    sysPrntI "fatFindFileStart: File found!\r\n"
+    add.l   %d2,%a2                         |; update ptr to dir entry
+    eor.l   %d0,%d0                         |; clear reg
+    ldLongLittle %a2 fatRootFilesize        |; get filesize
+    move.l  %d0,%d1                         |; return filesize in d1
+    ldWordLittle %a2 fatRootStartCluster    |; get file start cluster
+    lea     RAMBASIC,%a0                    |; return pointer to filesystem
+    rts
+
+.fatFindFileErrHeader:                      |; return existing error in d0
+    sysPrntI "fatFindFileStart: Error searching for file.\r\n"
+    addq.l  #4,%sp                          |; discard saved pointer
+    movea.l #0,%a0                          |; return null pointer
+    move.l  %a0,%d1
+    rts
+
+.fatFindFileErrFileSystem:
+    sysPrntI "fatFindFileStart: File system error.\r\n"
+    addq.l  #4,%sp                          |; discard saved pointer
+    movea.l #0,%a0                          |; return null pointer
+    moveq.l #4,%d0                          |; return error number
+    move.l  %a0,%d1
+    rts
+
+.fatFindFileErrNotFound:
+    sysPrntI "Specified file could not be found.\r\n"
+    movea.l #0,%a0                          |; return null pointer
+    moveq.l #5,%d0                          |; return error number
+    move.l  %a0,%d1
+    rts
+
+|; Read file into memory
+|; Calls all other fat file functions to find the specified file and read it
+|; into memory 
+|;  Parameters:
+|;      %a0.l   pointer to filename string
+|;  Returns:
+|;      %d0.l   0: Success | Else error
+|;      %d1.l   0: Error | Else byte size of file
+|;      %a0.l   pointer to start of file buffer | 0 on error
+fatLoadFile:
+    sysPrntI "fatLoadFile: Starting file load operation ...\r\n"
+    movem.l %a1-%a3/%d2-%d3,%sp@-           |; save working registers
+    |; start by finding the file, if it exists
+    bsr     fatFindFileStart                |; search for file start
+    tst.l   %d0                             |; returns first cluster on success
+    beq     .fatLoadFileErr                 |; returns 0 on error
+    |; d0 has the file's starting cluster
+    |; d1 has the filesize in bytes
+    |; a0 has the filesystem buffer
+    move.l  %d0,%d2                         |; copy starting cluster
+    move.l  %d1,%d3                         |; copy filesize
+    movea.l %a0,%a1                         |; copy filesystem pointer
+    sysPrntIreg "fatLoadFile: Found starting cluster for file: " %d0
+
+    |; get pointer to where file can be loaded into memory. This will follow
+    |; the file system data, including header, FATs, and root directory
+    move.l  globFatRootDirLBA,%d1           |; get Root Dir sector address
+    lsl.l   #8,%d1                          |; mult by 512 to get bytesize
+    lsl.l   #1,%d1
+    add.l   globFatRootDirSize,%d1          |; add total size of root dir
+    add.l   %d1,%a0                         |; add to filesystem pointer
+    |; now a0 holds pointer to where file will be loaded into memory
+
+    movea.l %a0,%a2                         |; copy start of file pointer
+    move.l  globFatBpbSectPerClust,%d1      |; get number of sectors to copy
+
+    move.l  globFatBpbReservedSects,%d0     |; number of reserved sectors
+    lsl.l   #8,%d0                          |; mult by 512 to get byte ptr
+    lsl.l   #1,%d0                          |;
+    lea     %a1@(%d0.l),%a3                 |; pointer to start of FAT
+    |; in this loop:
+    |;  d0: starting LBA for the current cluster
+    |;  d1: number of sectors per cluster (do not change)
+    |;  d2: current cluster
+    |;  d3: filesize (do not change)
+    |;  a0: pointer to load this cluster's data into
+    |;  a1: pointer to start of file system data (do not change)
+    |;  a2: pointer to start of file data (do not change)
+    |;  a3: pointer to start of FAT (do not change)
+    sysPrntI "fatLoadFile: Traversing FAT to load all file clusters.\r\n"
+    |;sysPrntIreg "fatLoadFile: Starting LBA for first cluster: " %d0
+    sysPrntIreg "fatLoadFile: Number of sectors per cluster:  " %d1
+    sysPrntIreg "fatLoadFile: Starting cluster for file:      " %d2
+    sysPrntIreg "fatLoadFile: File size in bytes:             " %d3
+    sysPrntIreg "fatLoadFile: File buffer pointer:            " %a0
+    sysPrntIreg "fatLoadFile: Filesystem data pointer:        " %a1
+    sysPrntIreg "fatLoadFile: File Allocation Table pointer:  " %a3
+    
+.fatLoadFileLp:
+    |; check cluster to see if we're at end of file
+    eor.l   %d0,%d0                         |; clear register
+    move.w  %d2,%d0                         |; get cluster
+    cmp.l   #1,%d0                          |; check for invalid cluster
+    ble     .fatLoadFileBadClust            |; exit if invalid
+    cmp.l   #0x0000fff8,%d0                 |; check for end of file
+    bge     .fatLoadFileDone                |; end loop if done
+    
+    |; now get starting LBA for this cluster
+    subq.l  #2,%d0                          |; required for FAT reasons
+    move.l  globFatBpbSectPerClust,%d4
+    mulu.w  %d4,%d0                         |; mult clust by sectPerClust
+    add.l   globFatDataStartLBA,%d0         |; add start of data region on disk
+    |; now d0 has the starting LBA for this cluster
+    |; we can finally read this cluster
+    |; d0: starting lba
+    |; d1: number of sectors
+    |; a0: buffer pointer
+    |; returns # of bytes read on success
+    bsr     ideReadSectMult
+    tst.l   %d0                             |; returns 0 on error
+    beq     .fatLoadFileErrRead             |; exit on read error
+    add.l   %d0,%a0                         |; add bytes read to buffer ptr
+
+    |; find the next cluster
+    move.w  %a3@(%d2.w),%d2                 |; get next sector
+    ror.w   #8,%d2                          |; endian swap
+    sysPrntIreg "fatLoadFile: Next cluster: " %d2
+    bra     .fatLoadFileLp                  |; continue load loop
+
+.fatLoadFileDone:
+    |; hurrah!
+    sysPrntI "fatLoadFile: Reached end of file.\r\n"
+    sysPrntIreg "fatLoadFile: File loaded to memory at: " %a2
+    eor.l   %d0,%d0                         |; return 0 on success
+    move.l  %d3,%d1                         |; return filesize on success
+    movea.l %a2,%a0                         |; return ptr to start of file
+    movem.l %sp@+,%a1-%a3/%d2-%d3           |; restore working registers
+    rts
+           
+.fatLoadFileBadClust:
+    sysPrntI "fatLoadFile: Invalid file cluster. Should be greater than 1.\r\n"
+    moveq.l #6,%d0                          |; return error code in d0
+    bra.s   .fatLoadFileErrorExit
+
+.fatLoadFileErrRead:
+    sysPrntI "fatLoadFile: Error reading file data.\r\n"
+    moveq.l #7,%d0                          |; return error code in d0
+    bra     .fatLoadFileErrorExit
+
+.fatLoadFileErr:
+    |; return existing error number in d0
+.fatLoadFileErrorExit:
+    eor.l   %d1,%d1                         |; return 0 in d1 on error
+    move.l  %d1,%a0                         |; return 0 in ptr a0 on error
+    movem.l %sp@+,%a1-%a3/%d2-%d3           |; restore working registers
+    rts
+
+    .even
+
+|; look for a "BOOT.BIN" on a FAT16-formatted disk and try to boot it
+ucBOOTFILE:
+    sysPrntI "Attempting to boot from \"BOOT.BIN\" ... \r\n?"
+    lea     sBootFileName,%a0               |; get pointer to filename
+    bsr     exeFile                         |; execute
+    tst.l   %d0                             |; returns 0 on success
+    bne     .ucBOOTerr                      |; print error message
+    sysPrntI "OS returned to monitor.\r\n?"
+    rts
+|; ucBOOTFILE:
+|;     sysPrntI "Attempting to boot from \"BOOT.BIN\" ... \r\n"
+|;     lea     sBootFileName,%a0               |; get pointer to filename
+|;     bsr     fatLoadFile                     |; try to load file
+|;     tst.l   %d0                             |; returns 0 on success
+|;     bne     .ucBOOTFerr                     |; exit if error
+|;     |; for now, we're just going to jump straight into the file.
+|;     |; in the future, it might be nice to add a function to parse 
+|;     |; an ELF header and properly load the file into memory
+
+|;     |; save all registers before jumping to user program
+|;     movem.l %a0-%a6/%d0-%d7,%sp@-           |; save registers
+|;     sysPrntI "BOOT.BIN loaded successfully ... booting.\r\n"
+|;     move.l  %sp,STACK_SAVE                  |; save stack pointer
+|;     sysPrntIreg "ucBOOTFILE: jumping execution to " %a0
+|;     jsr     %a0@                            |; jump to user program
+|;     |; this is where we'll end up if user program exits cleanly
+|;     sysPrntI "BOOT.BIN returned execution to monitor.\r\n"
+|;     move.l  STACK_SAVE,%sp                  |; restore stack pointer
+|;     movem.l %sp@+,%a0-%a6/%d0-%d7           |; restore registers
+|;     rts                                     |; return to monitor
+
+.ucBOOTFerr:
+    |; It would be useful to actually parse the error returned in d0,
+    |; but for now, we'll just print it.
+    sysPrntI "Disk error loading BOOT.BIN: "
+    callSYS trapPutHexWord
+    callSYS trapNewLine
+    rts
+
+sBootFileName:  .ascii  "BOOT    BIN"
+    .even
+
+
+|; loads a file from disk and executes it
+|;  parameters:
+|;      %a0.l   pointer to filename
+|;  returns:
+|;      %d0.l   0 on success
+exeFile:
+    bsr     fatLoadFile                     |; try to load file
+    tst.l   %d0                             |; returns 0 on success
+    bne     .exeFileErr                     |; exit on error
+
+    |; save all registers before jumping to user program
+    movem.l %a0-%a6/%d0-%d7,%sp@-           |; save all registers
+    move.l  %sp,STACK_SAVE                  |; save stack pointer
+    jsr     %a0@                            |; jump to user program
+    move.l  STACK_SAVE,%sp                  |; restore stack pointer
+    movem.l %sp@+,%a0-%a6/%d0-%d7           |; restore registers
+    moveq   #0,%d0                          |; return 0 on success
+    rts                                     |; return to monitor
+
+.exeFileErr:
+    rts
+
+
+|; reformats a filename in "8.3" format as an 11-character string
+|; uses stack frame for temporary storage
+|;  Parameters:
+|;      %a0.l   pointer to filename in 8.3 format
+|;  Returns:
+|;      %d0.l   returns 0 on success
+|;      %a0.l   pointer to cleaned up string (same pointer)
+formatFilename:
+    move.l  %a0,%a1                         |; copy pointer
+    eor.l   %d0,%d0                         |; clear counter
+    move.l  %d0,%d1                         |; d1 = dot position
+    move.l  %d0,%d2                         |; d2 = end of line
+    move.l  %d0,%d3                         |; d3 = char temp
+
+.formatFilenameSearchLp:
+    move.b  %a0@(%d0.w),%d3                 |; read byte
+
+    |; sysPrntIreg "formatFilename: Checking char: " %d3
+
+    cmp.b   #'.',%d3                        |; is it dot?
+    beq     .formatFilenameSearchDot        |; found dot
+
+    cmp.b   #0,%d3                          |; is it null? 
+    beq     .formatFilenameSearchNul        |; unexpected null
+
+    cmp.b   #0x0D,%d3                       |; is it end of line?
+    beq     .formatFilenameSearchEoL        |; found end of line
+
+    cmp.b   #0x7f,%d3                       |; is it too high?
+    bge     .formatFilenameSearchNP         |; unexpected nonprint
+
+    cmp.b   #' ',%d3                        |; is it non-print?
+    blt     .formatFilenameSearchNP         |; unexpected nonprint
+
+.formatFilenameSearchNext:
+    addq    #1,%d0                          |; increment counter
+    cmp.w   #13,%d0                         |; limit 12 char name.ext+EoL
+    blt     .formatFilenameSearchLp         |; loop until done
+
+    |; end of the loop
+.formatFilenameSearchEnd:
+    |; check if we found dot & end of line
+    tst.w   %d1                             |; check for dot found
+    beq     .formatFilenameErrNoDot         |; exit if no dot
+    tst.w   %d2                             |; check for end of line
+    beq     .formatFilenameErrTooLong       |; string too long 
+
+    sysPrntI "formatFilename: Found dot & EoL. Copying to temp string\r\n?"
+
+    |; we have dot & end of line, time to start copying
+    lea     %sp@(-14),%sp                   |; make some room on stack
+    eor.l   %d0,%d0                         |; clear counter
+.formatFilenameCopyNameLp:
+    move.b  %a0@(%d0.w),%sp@(%d0.w)         |; copy name byte
+    addq    #1,%d0                          |; increment counter
+    cmp.w   %d1,%d0                         |; are we at dot?
+    blt     .formatFilenameCopyNameLp       |; loop until name copied
+
+.formatFilenamePadLp:
+    cmp.w   #8,%d0                          |; is more padding needed?
+    bge     .formatFilenamePadDone          |; nope
+    move.b  #' ',%sp@(%d0.w)                |; add pad space
+    addq    #1,%d0                          |; increment counter
+    bra     .formatFilenamePadLp            |; loop until pad complete
+
+.formatFilenamePadDone:
+    |; unrolled loop for extension since it's only 3 chars.
+    |; d1 will now be our pointer to the original string
+    |; and d0 will be the pointer to the new string
+    addq    #1,%d1                          |; increment past dot
+    move.b  %a0@(0,%d1.w),%sp@(0,%d0.w)     |; copy first byte
+    move.b  %a0@(1,%d1.w),%sp@(1,%d0.w)     |; copy second byte
+    move.b  %a0@(2,%d1.w),%sp@(2,%d0.w)     |; copy third byte
+    move.b  #0,%sp@(3,%d0.w)                |; add null terminator
+
+    sysPrntI "formatFilename: Reformatting complete. Copying return string\r\n?"
+
+    |; now we need to copy the new string to the original position
+    eor.l   %d0,%d0                         |; clear pointer offset
+    moveq   #11,%d1                         |; set loop counter
+.formatFilenameEndCopyLp:
+    move.b  %sp@(%d0.w),%d2                 |; read char from stack
+    cmp.b   #' ',%d2                        |; one last nonprint check
+    blt     .formatFilenameEndCopyNP        |; change nonprint to space
+.formatFilenameEndCopyCopy:
+    move.b  %d2,%a0@(%d0.w)                 |; copy to return string
+    addq    #1,%d0                          |; increment offset
+    dbra    %d1,.formatFilenameEndCopyLp    |; loop until done
+
+    |; copy loop is done. clean up & exit
+    move.b  #0,%a0@(%d0.w)                  |; add final null terminator
+    lea     %sp@(14),%sp                    |; clear stack frame
+    eor.l   %d0,%d0                         |; return 0 on success
+    rts                                     |; return
+
+.formatFilenameEndCopyNP:
+    moveq   #' ',%d2                        |; change nonprint to space
+    bra     .formatFilenameEndCopyCopy      |; return to copy loop
+
+.formatFilenameSearchDot:
+    move.w  %d0,%d1                         |; save dot position
+    sysPrntIreg "formatFilename: Found dot: " %d1
+    bra     .formatFilenameSearchNext       |; continue loop
+
+.formatFilenameSearchEoL:
+    move.w  %d0,%d2                         |; save EoL position
+    sysPrntIreg "formatFilename: Found EoL: " %d2
+    bra     .formatFilenameSearchEnd        |; end loop
+
+.formatFilenameSearchNP:
+.formatFilenameSearchNul:
+    sysPrntI "formatFilename: Unexpected character.\r\n?"
+    moveq   #1,%d0
+    rts
+
+.formatFilenameErrNoDot:
+    sysPrntI "formatFilename: Couldn't find extension terminator.\r\n?"
+    moveq   #2,%d0
+    rts
+
+.formatFilenameErrTooLong:
+    sysPrntI "formatFilename: Filename too long.\r\n?"
+    moveq   #3,%d0
+    rts
+
+
+
+|; look for a user-specified file on a FAT16-formatted disk and try to run it
+ucEXECFILE:
+    lea     %a6@(LNBUFF),%a0                |; get pointer to line buffer
+.ucEXEFILEfindParam:
+    move.b  %a0@+,%d0                       |; get next char from buffer
+    cmp.b   #' ',%d0                        |; look for first space
+    beq     .ucEXEFILEfoundParam            |; continue when found
+    cmp.b   #0x0D,%d0                       |; check for end of line
+    beq     .ucEXECFILEfilenameErr          |; exit if no param found
+    bra     .ucEXEFILEfindParam             |; loop until param or EoL
+
+.ucEXEFILEfoundParam:
+    bsr     formatFilename                  |; format for FAT16
+    tst.w   %d0                             |; returns 0 on success
+    bne     .ucEXECFILEfilenameErr          |; exit on error
+
+    sysPrntI "Executing file: "
+    move.l  %a0,%a4
+    callSYS trapPutString
+    callSYS trapNewLine
+
+    bsr     exeFile                         |; load & execute file
+    tst.l   %d0                             |; returns 0 on success
+    bne     .ucEXECFILEerr                  |; print error
+
+    rts
+
+.ucEXECFILEfilenameErr:
+    sysPrntI "Please enter valid 8.3 filename.\r\n?"
+    rts
+
+.ucEXECFILEerr:
+    sysPrntI "Disk error loading file: "
+    callSYS trapPutHexLong
+    callSYS trapNewLine
+    rts
 

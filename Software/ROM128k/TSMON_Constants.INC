@@ -121,6 +121,59 @@
     movem.l %sp@+,%a4/%d1                   |; restore register
     .endm
 
+|; macro to print an immediate string
+    .macro  sysPrntI asciiStr
+    movem.l %a0-%a4/%d0-%d4,%sp@-           |; save registers
+    lea     %pc@(L\@Str),%a4                |; get pointer to string
+    move.b  #trapPutString,%d1              |; load syscall number
+    trap    #0                              |; call syscall handler
+    movem.l %sp@+,%a0-%a4/%d0-%d4           |; restore registers
+    bra.s   L\@mend
+L\@Str:     .ascii "\asciiStr\0"
+    .even
+L\@mend:
+    nop
+    .endm
+
+|; macro to print an immediate string followed by the hex long value of a reg
+    .macro  sysPrntIreg asciiStr prntReg
+    movem.l %a0-%a4/%d0-%d4,%sp@-           |; save registers
+    move.l  \prntReg,%sp@-                  |; save parameter
+    lea     %pc@(L\@Str),%a4                |; get pointer to string
+    move.b  #trapPutString,%d1              |; load syscall number
+    trap    #0                              |; call putString trap
+    move.l  %sp@+,%d0                       |; get saved parameter
+    callSYS trapPutHexLong
+    callSYS trapNewLine
+    movem.l %sp@+,%a0-%a4/%d0-%d4           |; restore registers
+    bra.s   L\@mend
+L\@Str:     .ascii "\asciiStr\0"
+    .even
+L\@mend:
+    nop
+    .endm
+
+|; macro to load little-endian word into D0
+    .macro  ldWordLittle ptrReg, offset
+    eor.l   %d0,%d0                         |; clear output register
+    move.b  \ptrReg@(\offset+1),%d0         |; get high byte
+    lsl.w   #8,%d0                          |; shift high byte into position
+    move.b  \ptrReg@(\offset),%d0           |; get low byte
+    .endm
+
+|; macro to load little-endian longword into D0
+    .macro  ldLongLittle ptrReg, offset
+    eor.l   %d0,%d0                         |; clear output register
+    move.b  \ptrReg@(\offset+3),%d0         |; get high byte
+    rol.l   #8,%d0                          |; shift up
+    move.b  \ptrReg@(\offset+2),%d0         |;
+    rol.l   #8,%d0                          |;
+    move.b  \ptrReg@(\offset+1),%d0         |;
+    rol.l   #8,%d0                          |;
+    move.b  \ptrReg@(\offset),%d0           |; get low byte
+    .endm
+
+
 
 
 |; uncomment to enable debug statements
