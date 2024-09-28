@@ -44,6 +44,8 @@ MAXUSERS = 8
     .extern uMemSize6
     .extern uMemSize7
 
+    .extern USERTABLE
+
     .struct 0
 utbl:
 utblConIn:  .space  4                       |; pointer to console in device
@@ -76,7 +78,7 @@ utbl_size = . - utbl                        |; size of this table
 |; kernel global variables
     .section bss,"w"
 
-USERTABLE:  ds.b utbl_size*MAXUSERS         |; reserve space for the user table
+|; USERTABLE:  ds.b utbl_size*MAXUSERS         |; reserve space for the user table
 
 USERNUM:    ds.l 1                          |; current user number
 

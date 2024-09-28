@@ -1,7 +1,13 @@
 
-
     .section text,"ax"
-    
+
+    .global COLDBOOT
+    .extern WARMBOOT
+    .extern romBot
+    .extern ramBot
+    .extern overlayPort
+    .extern ramTop
+
 |; cold boot entry
 COLDBOOT:
     lea         ramBot,%a0                  |; get pointer to address 0
@@ -14,8 +20,8 @@ _clearOverlay:
     move.b      #0,overlayPort              |; disable startup overlay
 
 _clearMainMem:
-    lea         stackTop,%a0                |; get pointer to top of memory space
-    lea         ramBot,%a1                  |; get pointer to bottom of memory space
+    lea         ramTop,%a0                  |; get pointer to top of memory space
+    lea         ramBot+1,%a1                |; get pointer to bottom of memory space
     eor.l       %d0,%d0                     |; get 0 in a data register
 1:
     move.l      %d0,%a0@-                   |; clear next longword of memory
@@ -37,3 +43,4 @@ _copyVectors:
 _doWarm:
     move.l      romBot,ramBot               |; copy vector 0
     jmp         WARMBOOT
+

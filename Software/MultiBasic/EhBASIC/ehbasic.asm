@@ -86,10 +86,11 @@
 |;***********************************************************************************/
 
     .include "ehbasic.inc"
+    .include "../Kernel/syscalls.inc"
 
     .section text,"ax"
 
-    .global startBasic
+    .global BASICENTRY
     .global labsizok
     .global labWARM
     .global FAC1_m
@@ -98,7 +99,7 @@
     .global FAC2_e
 
     .even
-    BRA     startBasic                      |; For convenience, so you can start from first address
+    BRA     BASICENTRY                      |; For convenience, so you can start from first address
 
 
 /***********************************************************************************/
@@ -108,58 +109,11 @@
 |; Output character to the console from register d0.b
 
 VEC_OUT:
-    movem.l %a0/%d1,%sp@-                   |; save working registers
-    lea.l   spioCOM0,%a0                    |; get COM 0 pointer
-TXNOTREADY:
-    btst    #5,%a0@(comRegLSR)              |; check if ready to transmit
-    Beq     TXNOTREADY                      |; repeat until ready
-    move.b  %d0,%a0@(comRegTX)              |; write character to COM port
-    movem.l %sp@+,%a0/%d1                   |; restore working registers
+    move.l  %d1,%sp@-                       |; save the syscall register
+    moveq.l #SysTrapConWrite,%d0            |; console write system call
+    trap    #0                              |; do system call
+    move.l  %sp@+,%d1                       |; restore register
     rts
-
-|; Output character to the second (aux) serial port from register d0.b
-
-/* .ifndef   FLASH_SUPPORT
-
-VEC_OUT2:
-        MOVEM.L  %A0/%D1,-(%A7)             |; Save working registers
-        LEA.L    ACIA_2,%A0                 |; %A0 points to console ACIA
-TXNOTREADY1:
-        MOVE.B   (%A0),%D1                  |; Read ACIA status
-        BTST     #1,%D1                     |; Test TDRE bit
-        BEQ      TXNOTREADY1                |; Until ACIA Tx ready
-        MOVE.B   %D0,2(%A0)                 |; Write character to send
-        MOVEM.L  (%A7)+,%A0/%D1             |; Restore working registers
-        RTS
-
-|; Output null terminated string pointed to by %A0 to first serial port.
-
-PRINTSTRING1:
-        MOVEM.L  %A0/%D0,-(%A7)             |; Save working registers
-LP1     CMP.B    #0,(%A0)                   |; Is it null?
-        BEQ      RET1                       |; If so, return
-        MOVE.B   (%A0)+,%D0                 |; Get character and advance pointer
-        JSR      VEC_OUT                    |; Output it
-        BRA      LP1                        |; Continue for rest of string
-
-RET1    MOVEM.L  (%A7)+,%A0/%D0             |; Restore working registers
-        RTS                                 |; Return
-
-|; Output null terminated string pointed to by %A0 to second serial port.
-
-PRINTSTRING2:
-        MOVEM.L  %A0/%D0,-(%A7)             |; Save working registers
-LP2     CMP.B    #0,(%A0)                   |; Is it null?
-        BEQ      RET2                       |; If so, return
-        MOVE.B   (%A0)+,%D0                 |; Get character and advance pointer
-        JSR      VEC_OUT2                   |; Output it
-        BRA      LP2                        |; Continue for rest of string
-
-RET2    MOVEM.L  (%A7)+,%A0/%D0             |; Restore working registers
-        RTS                                 |; Return
-
- .endif
-*/
 
 /***********************************************************************************/
 #
@@ -167,88 +121,11 @@ RET2    MOVEM.L  (%A7)+,%A0/%D0             |; Restore working registers
 |; else return Cb=0 if there's no character available
 
 VEC_IN:
-    movem.l %a0,%sp@-                       |; save working register
-    lea     spioCOM0,%a0                    |; get COM 0 pointer
-    btst    #0,%a0@(comRegLSR)              |; read COM 0 status bit
-    Bne     RXReady                         |; COM 0 has received data
-|    lea     spioCOM1,%a0                   |; get COM 1 pointer
-|    btst    #0,%a0@(comRegLSR)             |; read COM 1 status bit
-|    Bne     RXReady                        |; COM 1 has data
-RXNOTREADY:
-    movem.l %sp@+,%a0                       |; restore working register
-    andi.b  #0xfe,%ccr                      |; clear carry flag - no char available
+    move.l  %d1,%sp@-                       |; save system call register
+    moveq.l #SysTrapConRead,%d1             |; console read system call
+    trap    #0                              |; do system call
+    move.l  %sp@+,%d1                       |; restore working register
     rts
-RXReady:
-    move.b  %a0@(comRegRX),%d0              |; read received byte
-    movem.l %sp@+,%a0                       |; restore working register
-    ori.b   #1,%ccr                         |; set carry flag - char available
-    rts
-
-|; Input routine used in LOAD mode to read file from USB flash storage.
-
-/* .ifndef   FLASH_SUPPORT
-
-VEC_IN2:
-        MOVEM.L  %A0/%D1,-(%A7)             |; Save working registers
-        LEA.L    VEC_OUT2,%A0               |; Redirect output to aux. port.
-        MOVE.L   %A0,V_OUTPv(%a3)
-
-|; The first time, send READ <filename> 1 1
-|; Subsequent times, send READ <filename> n 1
-
-        LEA      LAB_READN(%pc),%A0         |; Send READ command string
-        BSR      PRINTSTRING2               |; Print null terminated string
-
-        LEA      load_filename(%A3),%A0     |; Send filename string
-        BSR      PRINTSTRING2               |; Print null terminated string
-
-        MOVE.B   #' ',%D0                   |; Send space
-        JSR      VEC_OUT2
-
-        CMP.B    #1,load_first(%A3)         |; First time?
-        BNE      NOTFIRST1
-        MOVE.B   #'1',%D0                   |; Send '1'
-        CLR.B    load_first(%A3)                        |; Clear first flag
-        BRA      S.endifMD1
-NOTFIRST1:
-        MOVE.B   #'n',%D0                   |; Send 'n'
-S.endifMD1:
-        JSR      VEC_OUT2
-        MOVE.B   #' ',%D0                   |; Send space
-        JSR      VEC_OUT2
-        MOVE.B   #'1',%D0                   |; Send '1'
-        JSR      VEC_OUT2
-        MOVE.B   #0x0D,%D0                  |; Send <Return>
-        JSR      VEC_OUT2
-
-        LEA.L    VEC_OUT,%A0                |; Redirect output back to console port.
-        MOVE.L   %A0,V_OUTPv(%a3)
-
-|; Read one byte from USB host
-
-        LEA.L    ACIA_2,%A0                 |; %A0 points to console ACIA
-RXNOTREADY2:
-        MOVE.B   (%A0),%D1                  |; Read ACIA status
-        BTST     #0,%D1                     |; Test RDRF bit
-        BEQ      RXNOTREADY2                |; Branch if ACIA Rx not ready
-        MOVE.B   2(%A0),%D0                 |; Read character received
-
-|; Check for end of file character ('~') and if found, redirect
-|; input back to console port.
-
-        CMP.B    #'~',%D0                   |; End of file marker?
-        BNE      NOTEOF
-        MOVE.B   #0x0D,%D0                  |; Convert '~' to a Return
-        LEA.L    VEC_IN,%A0                 |; Redirect input back to console port.
-        MOVE.L   %A0,V_INPTv(%a3)
-NOTEOF:
-        MOVEM.L  (%A7)+,%A0/%D1             |; Restore working registers
-        ORI.b    #1,%CCR                    |; Set the carry, flag we got a byte
-        RTS                                 |; Return
-
- .endif
- */
-
 
 /***********************************************************************************/
 #
@@ -417,7 +294,7 @@ code_start:
 |; BASIC cold start entry point. assume entry with RAM address in %a0 and RAM length
 |; in d0
 
-startBasic:
+BASICENTRY:
 LAB_COLD:
     CMP.l   #0x4000,%d0                     |; compare size with 16k
     BGE     LAB_sizok                       |; branch if >= 16k
@@ -7994,107 +7871,107 @@ RTS_025:
 #
 |; token values needed for BASIC
 
-    .equ    TK_END, 0x80                        |; 0x80
-    .equ    TK_FOR, TK_END+1        |; 0x81
-    .equ    TK_NEXT, TK_FOR+1        |; 0x82
-    .equ    TK_DATA, TK_NEXT+1        |; 0x83
-    .equ    TK_INPUT, TK_DATA+1        |; 0x84
-    .equ    TK_DIM, TK_INPUT+1        |; 0x85
-    .equ    TK_READ, TK_DIM+1        |; 0x86
-    .equ    TK_LET, TK_READ+1        |; 0x87
-    .equ    TK_DEC, TK_LET+1        |; 0x88
-    .equ    TK_GOTO, TK_DEC+1        |; 0x89
-    .equ    TK_RUN, TK_GOTO+1        |; 0x8A
-    .equ    TK_IF, TK_RUN+1        |; 0x8B
-    .equ    TK_RESTORE, TK_IF+1                        |; 0x8C
-    .equ    TK_GOSUB, TK_RESTORE+1        |; 0x8D
-    .equ    TK_RETURN, TK_GOSUB+1        |; 0x8E
-    .equ    TK_REM, TK_RETURN+1        |; 0x8F
-    .equ    TK_STOP, TK_REM+1        |; 0x90
-    .equ    TK_ON, TK_STOP+1        |; 0x91
-    .equ    TK_NULL, TK_ON+1                        |; 0x92
-    .equ    TK_INC, TK_NULL+1        |; 0x93
-    .equ    TK_WAIT, TK_INC+1        |; 0x94
-    .equ    TK_LOAD, TK_WAIT+1        |; 0x95
-    .equ    TK_SAVE, TK_LOAD+1        |; 0x96
-    .equ    TK_DEF, TK_SAVE+1        |; 0x97
-    .equ    TK_POKE, TK_DEF+1        |; 0x98
-    .equ    TK_DOKE, TK_POKE+1        |; 0x99
-    .equ    TK_LOKE, TK_DOKE+1        |; 0x9A
-    .equ    TK_CALL, TK_LOKE+1        |; 0x9B
-    .equ    TK_DO, TK_CALL+1        |; 0x9C
-    .equ    TK_LOOP, TK_DO+1                        |; 0x9D
-    .equ    TK_PRINT, TK_LOOP+1        |; 0x9E
-    .equ    TK_CONT, TK_PRINT+1        |; 0x9F
-    .equ    TK_LIST, TK_CONT+1        |; 0xA0
-    .equ    TK_CLEAR, TK_LIST+1        |; 0xA1
-    .equ    TK_NEW, TK_CLEAR+1        |; 0xA2
-    .equ    TK_WIDTH, TK_NEW+1        |; 0xA3
-    .equ    TK_GET, TK_WIDTH+1        |; 0xA4
-    .equ    TK_SWAP, TK_GET+1        |; 0xA5
-    .equ    TK_BITSET, TK_SWAP+1        |; 0xA6
-    .equ    TK_BITCLR, TK_BITSET+1        |; 0xA7
-    .equ    TK_TAB, TK_BITCLR+1        |; 0xA8
-    .equ    TK_ELSE, TK_TAB+1        |; 0xA9
-    .equ    TK_TO, TK_ELSE+1        |; 0xAA
-    .equ    TK_FN, TK_TO+1                        |; 0xAB
-    .equ    TK_SPC, TK_FN+1                        |; 0xAC
-    .equ    TK_THEN, TK_SPC+1        |; 0xAD
-    .equ    TK_NOT, TK_THEN+1        |; 0xAE
-    .equ    TK_STEP, TK_NOT+1        |; 0xAF
-    .equ    TK_UNTIL, TK_STEP+1        |; 0xB0
-    .equ    TK_WHILE, TK_UNTIL+1        |; 0xB1
-    .equ    TK_PLUS, TK_WHILE+1        |; 0xB2
-    .equ    TK_MINUS, TK_PLUS+1        |; 0xB3
-    .equ    TK_MULT, TK_MINUS+1        |; 0xB4
-    .equ    TK_DIV, TK_MULT+1        |; 0xB5
-    .equ    TK_POWER, TK_DIV+1        |; 0xB6
-    .equ    TK_AND, TK_POWER+1        |; 0xB7
-    .equ    TK_EOR, TK_AND+1        |; 0xB8
-    .equ    TK_OR, TK_EOR+1        |; 0xB9
-    .equ    TK_RSHIFT, TK_OR+1                        |; 0xBA
-    .equ    TK_LSHIFT, TK_RSHIFT+1        |; 0xBB
-    .equ    TK_GT, TK_LSHIFT+1        |; 0xBC
-    .equ    TK_EQUAL, TK_GT+1                        |; 0xBD
-    .equ    TK_LT, TK_EQUAL+1        |; 0xBE
-    .equ    TK_SGN, TK_LT+1                        |; 0xBF
-    .equ    TK_INT, TK_SGN+1        |; 0xC0
-    .equ    TK_ABS, TK_INT+1        |; 0xC1
-    .equ    TK_USR, TK_ABS+1        |; 0xC2
-    .equ    TK_FRE, TK_USR+1        |; 0xC3
-    .equ    TK_POS, TK_FRE+1        |; 0xC4
-    .equ    TK_SQR, TK_POS+1        |; 0xC5
-    .equ    TK_RND, TK_SQR+1        |; 0xC6
-    .equ    TK_LOG, TK_RND+1        |; 0xC7
-    .equ    TK_EXP, TK_LOG+1        |; 0xC8
-    .equ    TK_COS, TK_EXP+1        |; 0xC9
-    .equ    TK_SIN, TK_COS+1        |; 0xCA
-    .equ    TK_TAN, TK_SIN+1        |; 0xCB
-    .equ    TK_ATN, TK_TAN+1        |; 0xCC
-    .equ    TK_PEEK, TK_ATN+1        |; 0xCD
-    .equ    TK_DEEK, TK_PEEK+1        |; 0xCE
-    .equ    TK_LEEK, TK_DEEK+1        |; 0xCF
-    .equ    TK_LEN, TK_LEEK+1        |; 0xD0
-    .equ    TK_STRS, TK_LEN+1        |; 0xD1
-    .equ    TK_VAL, TK_STRS+1        |; 0xD2
-    .equ    TK_ASC, TK_VAL+1        |; 0xD3
-    .equ    TK_UCASES, TK_ASC+1        |; 0xD4
-    .equ    TK_LCASES, TK_UCASES+1        |; 0xD5
-    .equ    TK_CHRS, TK_LCASES+1        |; 0xD6
-    .equ    TK_HEXS, TK_CHRS+1        |; 0xD7
-    .equ    TK_BINS, TK_HEXS+1        |; 0xD8
-    .equ    TK_BITTST, TK_BINS+1        |; 0xD9
-    .equ    TK_MAX, TK_BITTST+1        |; 0xDA
-    .equ    TK_MIN, TK_MAX+1        |; 0xDB
-    .equ    TK_RAM, TK_MIN+1        |; 0xDC
-    .equ    TK_PI, TK_RAM+1        |; 0xDD
-    .equ    TK_TWOPI, TK_PI+1                        |; 0xDE
-    .equ    TK_VPTR, TK_TWOPI+1        |; 0xDF
-    .equ    TK_SADD, TK_VPTR+1        |; 0xE0
-    .equ    TK_LEFTS, TK_SADD+1        |; 0xE1
-    .equ    TK_RIGHTS, TK_LEFTS+1        |; 0xE2
-    .equ    TK_MIDS, TK_RIGHTS+1        |; 0xE3
-    .equ    TK_USINGS, TK_MIDS+1        |; 0xE4
+    .equ    TK_END,     0x80                |; 0x80
+    .equ    TK_FOR,     TK_END+1            |; 0x81
+    .equ    TK_NEXT,    TK_FOR+1            |; 0x82
+    .equ    TK_DATA,    TK_NEXT+1           |; 0x83
+    .equ    TK_INPUT,   TK_DATA+1           |; 0x84
+    .equ    TK_DIM,     TK_INPUT+1          |; 0x85
+    .equ    TK_READ,    TK_DIM+1            |; 0x86
+    .equ    TK_LET,     TK_READ+1           |; 0x87
+    .equ    TK_DEC,     TK_LET+1            |; 0x88
+    .equ    TK_GOTO,    TK_DEC+1            |; 0x89
+    .equ    TK_RUN,     TK_GOTO+1           |; 0x8A
+    .equ    TK_IF,      TK_RUN+1            |; 0x8B
+    .equ    TK_RESTORE, TK_IF+1             |; 0x8C
+    .equ    TK_GOSUB,   TK_RESTORE+1        |; 0x8D
+    .equ    TK_RETURN,  TK_GOSUB+1          |; 0x8E
+    .equ    TK_REM,     TK_RETURN+1         |; 0x8F
+    .equ    TK_STOP,    TK_REM+1            |; 0x90
+    .equ    TK_ON,      TK_STOP+1           |; 0x91
+    .equ    TK_NULL,    TK_ON+1             |; 0x92
+    .equ    TK_INC,     TK_NULL+1           |; 0x93
+    .equ    TK_WAIT,    TK_INC+1            |; 0x94
+    .equ    TK_LOAD,    TK_WAIT+1           |; 0x95
+    .equ    TK_SAVE,    TK_LOAD+1           |; 0x96
+    .equ    TK_DEF,     TK_SAVE+1           |; 0x97
+    .equ    TK_POKE,    TK_DEF+1            |; 0x98
+    .equ    TK_DOKE,     TK_POKE+1          |; 0x99
+    .equ    TK_LOKE,    TK_DOKE+1           |; 0x9A
+    .equ    TK_CALL,    TK_LOKE+1           |; 0x9B
+    .equ    TK_DO,      TK_CALL+1           |; 0x9C
+    .equ    TK_LOOP,    TK_DO+1             |; 0x9D
+    .equ    TK_PRINT,   TK_LOOP+1           |; 0x9E
+    .equ    TK_CONT,    TK_PRINT+1          |; 0x9F
+    .equ    TK_LIST,    TK_CONT+1           |; 0xA0
+    .equ    TK_CLEAR,   TK_LIST+1           |; 0xA1
+    .equ    TK_NEW,     TK_CLEAR+1          |; 0xA2
+    .equ    TK_WIDTH,   TK_NEW+1            |; 0xA3
+    .equ    TK_GET,     TK_WIDTH+1          |; 0xA4
+    .equ    TK_SWAP,    TK_GET+1            |; 0xA5
+    .equ    TK_BITSET,  TK_SWAP+1           |; 0xA6
+    .equ    TK_BITCLR,  TK_BITSET+1         |; 0xA7
+    .equ    TK_TAB,     TK_BITCLR+1         |; 0xA8
+    .equ    TK_ELSE,    TK_TAB+1            |; 0xA9
+    .equ    TK_TO,      TK_ELSE+1           |; 0xAA
+    .equ    TK_FN,      TK_TO+1             |; 0xAB
+    .equ    TK_SPC,     TK_FN+1             |; 0xAC
+    .equ    TK_THEN,    TK_SPC+1            |; 0xAD
+    .equ    TK_NOT,     TK_THEN+1           |; 0xAE
+    .equ    TK_STEP,    TK_NOT+1            |; 0xAF
+    .equ    TK_UNTIL,   TK_STEP+1           |; 0xB0
+    .equ    TK_WHILE,   TK_UNTIL+1          |; 0xB1
+    .equ    TK_PLUS,    TK_WHILE+1          |; 0xB2
+    .equ    TK_MINUS,   TK_PLUS+1           |; 0xB3
+    .equ    TK_MULT,    TK_MINUS+1          |; 0xB4
+    .equ    TK_DIV,     TK_MULT+1           |; 0xB5
+    .equ    TK_POWER,   TK_DIV+1            |; 0xB6
+    .equ    TK_AND,     TK_POWER+1          |; 0xB7
+    .equ    TK_EOR,     TK_AND+1            |; 0xB8
+    .equ    TK_OR,      TK_EOR+1            |; 0xB9
+    .equ    TK_RSHIFT,  TK_OR+1             |; 0xBA
+    .equ    TK_LSHIFT,  TK_RSHIFT+1         |; 0xBB
+    .equ    TK_GT,      TK_LSHIFT+1         |; 0xBC
+    .equ    TK_EQUAL,   TK_GT+1             |; 0xBD
+    .equ    TK_LT,      TK_EQUAL+1          |; 0xBE
+    .equ    TK_SGN,     TK_LT+1             |; 0xBF
+    .equ    TK_INT,     TK_SGN+1            |; 0xC0
+    .equ    TK_ABS,     TK_INT+1            |; 0xC1
+    .equ    TK_USR,     TK_ABS+1            |; 0xC2
+    .equ    TK_FRE,     TK_USR+1            |; 0xC3
+    .equ    TK_POS,     TK_FRE+1            |; 0xC4
+    .equ    TK_SQR,     TK_POS+1            |; 0xC5
+    .equ    TK_RND,     TK_SQR+1            |; 0xC6
+    .equ    TK_LOG,     TK_RND+1            |; 0xC7
+    .equ    TK_EXP,     TK_LOG+1            |; 0xC8
+    .equ    TK_COS,     TK_EXP+1            |; 0xC9
+    .equ    TK_SIN,     TK_COS+1            |; 0xCA
+    .equ    TK_TAN,     TK_SIN+1            |; 0xCB
+    .equ    TK_ATN,     TK_TAN+1            |; 0xCC
+    .equ    TK_PEEK,    TK_ATN+1            |; 0xCD
+    .equ    TK_DEEK,    TK_PEEK+1           |; 0xCE
+    .equ    TK_LEEK,    TK_DEEK+1           |; 0xCF
+    .equ    TK_LEN,     TK_LEEK+1           |; 0xD0
+    .equ    TK_STRS,    TK_LEN+1            |; 0xD1
+    .equ    TK_VAL,     TK_STRS+1           |; 0xD2
+    .equ    TK_ASC,     TK_VAL+1            |; 0xD3
+    .equ    TK_UCASES,  TK_ASC+1            |; 0xD4
+    .equ    TK_LCASES,  TK_UCASES+1         |; 0xD5
+    .equ    TK_CHRS,    TK_LCASES+1         |; 0xD6
+    .equ    TK_HEXS,    TK_CHRS+1           |; 0xD7
+    .equ    TK_BINS,    TK_HEXS+1           |; 0xD8
+    .equ    TK_BITTST,  TK_BINS+1           |; 0xD9
+    .equ    TK_MAX,     TK_BITTST+1         |; 0xDA
+    .equ    TK_MIN,     TK_MAX+1            |; 0xDB
+    .equ    TK_RAM,     TK_MIN+1            |; 0xDC
+    .equ    TK_PI,      TK_RAM+1            |; 0xDD
+    .equ    TK_TWOPI,   TK_PI+1             |; 0xDE
+    .equ    TK_VPTR,    TK_TWOPI+1          |; 0xDF
+    .equ    TK_SADD,    TK_VPTR+1           |; 0xE0
+    .equ    TK_LEFTS,   TK_SADD+1           |; 0xE1
+    .equ    TK_RIGHTS,  TK_LEFTS+1          |; 0xE2
+    .equ    TK_MIDS,    TK_RIGHTS+1         |; 0xE3
+    .equ    TK_USINGS,  TK_MIDS+1           |; 0xE4
 
 
 

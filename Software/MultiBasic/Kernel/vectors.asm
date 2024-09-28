@@ -134,9 +134,9 @@ vectorNameTable:
     dc.l    strMmuConfigErr |; 56   0e0
     dc.l    strMmuUnused    |; 57   0e4
     dc.l    strMmuUnused    |; 58   0e8
-    .dcb.l  5,vecUnused     |; 59-63    0ec-0fc
-    .dcb.l  64,vecUnused    |; 64-127   100-1fc User-defined
-    .dcb.l  128,vecUnused   |; 128-255  200-3fc
+    .dcb.l  5,strUnused     |; 59-63    0ec-0fc
+    .dcb.l  64,strUnused    |; 64-127   100-1fc User-defined
+    .dcb.l  128,strUnused   |; 128-255  200-3fc
 
 
 |; table of friendly name strings for all vectors
@@ -150,7 +150,7 @@ strTrapV:       .ascii  "TRAPV\0"
 strPrivViol:    .ascii  "Privilege Violation\0"
 strTrace:       .ascii  "Trace IRQ\0"
 strALine:       .ascii  "A-Trap\0"
-strFline:       .ascii  "F-Trap\0"
+strFLine:       .ascii  "F-Trap\0"
 strUnused:      .ascii  "Unused Vector\0"
 strCoproViol:   .ascii  "Coprocessor Err\0"
 strFormatErr:   .ascii  "Format Err\0"

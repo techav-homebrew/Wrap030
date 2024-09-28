@@ -1,6 +1,7 @@
 
 
     .include    "kglobals.inc"
+    .include    "syscalls.inc"
 
     .section text,"ax"
 
@@ -88,18 +89,18 @@ kUserTblInit:
 SysTrap:
     |; cmp.b   #0,%d1                          |; check for syscall 0
     |; all system calls start with implicit yield
-    beq     SysTrapYield
+    beq     doSysTrapYield
 SysTrapTbl:
-    cmp.b   #1,%d1                          |;
-    beq     SysTrapConRead
-    cmp.b   #2,%d1
-    beq     SysTrapConWrite
+    cmp.b   #SysTrapConRead,%d1                          |;
+    beq     doSysTrapConRead
+    cmp.b   #SysTrapConWrite,%d1
+    beq     doSysTrapConWrite
 
     rte
 
 
 |; task switch 
-SysTrapYield:
+doSysTrapYield:
 
 
 |; save user state to user table
@@ -168,7 +169,7 @@ RestoreUserContext:
 
 
 
-SysTrapConRead:
+doSysTrapConRead:
     movem.l %a0/%d0,%sp@-                   |; save working registers
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get user number
@@ -189,7 +190,7 @@ SysTrapConRead:
     ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
     rte
 
-SysTrapConWrite:
+doSysTrapConWrite:
     movem.l %a0/%d2,%sp@-                   |; save working registers
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d2                     |; get user number
