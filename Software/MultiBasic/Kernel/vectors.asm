@@ -22,7 +22,7 @@ vector:
     dc.l    exceptionType2      |; 13   034 coprocessor protocol violation
     dc.l    exceptionType2      |; 14   038 format error
     dc.l    exceptionType1      |; 15   03c uninitialized interrupt
-    dcb.l   8,exceptionType1    |; 16-23    040-05c reserved
+    .dcb.l  8,exceptionType1    |; 16-23    040-05c reserved
     dc.l    exceptionType1      |; 24   060 spurious interrupt
     dc.l    exceptionType1      |; 25   064 autovector 1
     dc.l    exceptionType1      |; 26   068 autovector 2
@@ -58,9 +58,9 @@ vector:
     dc.l    exceptionType2      |; 56   0e0 MMU configuration error
     dc.l    exceptionType2      |; 57   0e4 68851 reserved
     dc.l    exceptionType2      |; 58   0e8 68851 reserved
-    dcb.l   5,exceptionType1    |; 59-63    0ec-0fc reserved
-    dcb.l   64,exceptionType1   |; 64-127   100-1fc User-defined
-    dcb.l   128,exceptionType1  |; 128-255  200-3fc User-defined
+    .dcb.l  5,exceptionType1    |; 59-63    0ec-0fc reserved
+    .dcb.l  64,exceptionType1   |; 64-127   100-1fc User-defined
+    .dcb.l  128,exceptionType1  |; 128-255  200-3fc User-defined
 
 
 |; type 1 exception will be exceptions we can recover from
@@ -92,13 +92,13 @@ vectorNameTable:
     dc.l    strTrapV        |;  7   01c
     dc.l    strPrivViol     |;  8   020
     dc.l    strTrace        |;  9   024
-    dc.l    strTrapA        |; 10   028
-    dc.l    strTrapF        |; 11   02c
+    dc.l    strALine        |; 10   028
+    dc.l    strFLine        |; 11   02c
     dc.l    strUnused       |; 12   030
     dc.l    strCoproViol    |; 13   034
     dc.l    strFormatErr    |; 14   038
     dc.l    strUninitIrq    |; 15   03c
-    dcb.l   8,strUnused     |; 16-23    040-05c
+    .dcb.l  8,strUnused     |; 16-23    040-05c
     dc.l    strSpurIrq      |; 24   060
     dc.l    strIrq1         |; 25   064
     dc.l    strIrq2         |; 26   068
@@ -134,9 +134,9 @@ vectorNameTable:
     dc.l    strMmuConfigErr |; 56   0e0
     dc.l    strMmuUnused    |; 57   0e4
     dc.l    strMmuUnused    |; 58   0e8
-    dcb.l   5,vecUnused     |; 59-63    0ec-0fc
-    dcb.l   64,vecUnused    |; 64-127   100-1fc User-defined
-    dcb.l   128,vecUnused   |; 128-255  200-3fc
+    .dcb.l  5,vecUnused     |; 59-63    0ec-0fc
+    .dcb.l  64,vecUnused    |; 64-127   100-1fc User-defined
+    .dcb.l  128,vecUnused   |; 128-255  200-3fc
 
 
 |; table of friendly name strings for all vectors
@@ -149,8 +149,8 @@ strChk:         .ascii  "CHK Trap\0"
 strTrapV:       .ascii  "TRAPV\0"
 strPrivViol:    .ascii  "Privilege Violation\0"
 strTrace:       .ascii  "Trace IRQ\0"
-strTrapA:       .ascii  "A-Trap\0"
-strTrapF:       .ascii  "F-Trap\0"
+strALine:       .ascii  "A-Trap\0"
+strFline:       .ascii  "F-Trap\0"
 strUnused:      .ascii  "Unused Vector\0"
 strCoproViol:   .ascii  "Coprocessor Err\0"
 strFormatErr:   .ascii  "Format Err\0"
@@ -189,3 +189,5 @@ strFpuNaN:      .ascii  "FPU NaN Err\0"
 strMmuConfigErr: .ascii "MMU Config Err\0"
 strMmuUnused:   .ascii  "MMU Err\0"
     .even
+
+

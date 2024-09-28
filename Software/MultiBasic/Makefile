@@ -29,22 +29,36 @@ RM = rm -rf
 CP = cp -f
 endif
 
-ROM: rom.out
+
+#TOPTARGETS := all clean
+
+#SUBDIRS := $(wildcard */.)
+
+#$(TOPTARGETS): $(SUBDIRS)
+#$(SUBDIRS):
+#	$(MAKE) -C $@ $(MAKECMDGOALS)
+
+#.PHONY: $(TOPTARGETS) $(SUBDIRS)
+
+SUBDIRS := $(wildcard */.)
+
+SRCS = $(wildcard */*.asm)
+OBJS = $(patsubst %.asm,%.o,$(SRCS))
+
+$(info DEBUG $(OBJS))
+
+all: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
 
-rom.out: Kernel/kernel.o Kernel/boot.o Kernel/vectors.o
+rom.out: $(OBJS)
 	$(LD) $(LDFLAGS) -Map rom.map -o rom.out $^
 
-clean:
-	-$(RM) *.o *.out *.L68 *.srec *.map *.i
-	$(MAKE) -C Kernel clean
-	$(MAKE) -C EhBASIC clean
-	
+$(OBJS): $(SRCS)
+	$(info CALLING MAKE $(@F))
+	$(MAKE) -C $(@D) $(@F)
 
-.PHONY: rebuild
-rebuild:
-	$(MAKE) clean
-	$(MAKE) ROM
 
-burn: rom.srec
-	$(PYTHON) ..\..\Utilities\srecLoadRAMwin.py rom.srec
+clean: $(SUBDIRS)
+$(SUBDIRS):
+	$(MAKE) -C $@ $(MAKECMDGOALS)
+.PHONY: clean $(SUBDIRS)

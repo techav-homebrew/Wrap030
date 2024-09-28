@@ -79,3 +79,4 @@ utbl_size = . - utbl                        |; size of this table
 USERTABLE:  ds.b utbl_size*MAXUSERS         |; reserve space for the user table
 
 USERNUM:    ds.l 1                          |; current user number
+

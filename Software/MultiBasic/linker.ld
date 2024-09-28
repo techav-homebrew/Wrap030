@@ -79,14 +79,14 @@ ENTRY(_cold)
 SECTIONS{
     .kernel 0x00200000 :
     {
-        vectors.o ( text )
-        boot.o ( text )
-        kernel.o ( text )
+        Kernel/vectors.o ( text )
+        Kernel/boot.o ( text )
+        Kernel/kernel.o ( text )
     } > rom = 0xff
     .bss 0x400 (NOLOAD) :
     {
         ramStart = . ;
-        kernel.o ( bss )
+        Kernel/kernel.o ( bss )
     } > ram
     /DISCARD/ :
     {

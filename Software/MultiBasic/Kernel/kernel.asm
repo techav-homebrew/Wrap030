@@ -1,6 +1,6 @@
 
 
-    .include    "kglobals.asm"
+    .include    "kglobals.inc"
 
     .section text,"ax"
 
@@ -14,7 +14,8 @@ kEnableCache:
 kBasicLoader:
     lea     ROMBASIC,%a0                    |; get pointer to BASIC in ROM
     lea     RAMBASIC,%a1                    |; get pointer to where BASIC will go in RAM
-    move.l  #(SIZEBASIC>>2),%d0             |; get size of BASIC in longwords
+    move.l  #SIZEBASIC,%d0                  |; get size of BASIC in bytes
+    lsr.l   #2,%d0                          |; convert to count of longwords
 1:
     move.l  %a0@+,%a1@+                     |; copy BASIC into RAM one longword at a time
     dbra    %d0,1b                          |; keep copying until finished
