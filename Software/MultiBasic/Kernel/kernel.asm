@@ -5,10 +5,22 @@
     .section text,"ax"
 
 WARMBOOT:
-    |; load BASIC into RAM
+    |; enable CPU cache
+kEnableCache:
+    move.l  #0x00000101,%d0                 |; enable data & instruction cache
+    movec   %d0,%cacr                       |; write to cache control register
 
+    |; load BASIC into RAM
+kBasicLoader:
+    lea     ROMBASIC,%a0                    |; get pointer to BASIC in ROM
+    lea     RAMBASIC,%a1                    |; get pointer to where BASIC will go in RAM
+    move.l  #(SIZEBASIC>>2),%d0             |; get size of BASIC in longwords
+1:
+    move.l  %a0@+,%a1@+                     |; copy BASIC into RAM one longword at a time
+    dbra    %d0,1b                          |; keep copying until finished
 
     |; initialize user data table
+kInit:
     move.l  #MAXUSERS-1,%d0                 |; start at end of user numbers
     lea     USERTABLE,%a0                   |; pointer to user table
 1:
