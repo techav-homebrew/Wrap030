@@ -1,9 +1,14 @@
 |; initial boot vectors
 
-    .section text,"ax"
+    .section    text,"ax"
+    .include    "kmacros.inc"
     .extern STACKINIT
     .extern COLDBOOT
     .extern SysTrap
+    .extern USERTABLE
+    .extern USERNUM
+    .extern kUserTblInit
+    .extern NextUser
 
 vector:
     dc.l    STACKINIT           |;  0   000
@@ -31,7 +36,7 @@ vector:
     dc.l    exceptionType1      |; 29   074 autovector 5
     dc.l    exceptionType1      |; 30   078 autovector 6
     dc.l    exceptionType1      |; 31   07c autovector 7
-    dc.l    exceptionSysCall    |; 32   080 trap 0
+    dc.l    SysTrap             |; 32   080 trap 0
     dc.l    exceptionType1      |; 33   084 trap 1
     dc.l    exceptionType1      |; 34   088 trap 2
     dc.l    exceptionType1      |; 35   08c trap 3
@@ -66,19 +71,31 @@ vector:
 |; type 1 exception will be exceptions we can recover from
 |; and return to the current user without issue
 exceptionType1:
-
-RTE
+    movem.l %a0/%d0,%sp@-                   |; save registers
+    move.w  %sp@(14),%d0                    |; get vector offset
+    bsr     printVector                     |; print vector name string
+    movem.l %sp@+,%a0/%d0                   |; restore registers
+    rte                                     |; return to current user
 
 |; type 2 exception will be exceptions we cannot recover from
 |; and the user will need to be reinitialized
 exceptionType2:
+    move.w  %sp@(14),%d0                    |; get vector offset
+    bsr     printVector                     |; print vector name string
 
-RTE
+    lea     USERTABLE,%a0                   |; get pointer to user table
+    move.l  USERNUM,%d0                     |; get current user number
+    jsr     kUserTblInit                    |; reinitialize current user
 
-|; type 3 exception is system trap, TRAP 0
-exceptionSysCall = SysTrap
+    jmp     NextUser                        |; skip to the next user
 
-
+|; print the exception name for vector offset in D0
+printVector:
+    andi.w  #0x0fff,%d0                     |; mask vector number
+    lea     vectorNameTable,%a0             |; get pointer to string pointer table
+    move.l  %a0@(%d0.w),%a0                 |; get string pointer
+    debugPrintStr                           |; kernel printstring macro
+    rts
 
 |; table of pointers to friendly name strings for all vectors
 vectorNameTable:

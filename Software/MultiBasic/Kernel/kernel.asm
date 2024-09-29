@@ -2,6 +2,9 @@
 
     .include    "kglobals.inc"
     .include    "syscalls.inc"
+    .include    "kmacros.inc"
+    .global     kUserTblInit
+    .global     NextUser
 
     .section text,"ax"
 
@@ -10,9 +13,28 @@ WARMBOOT:
 kEnableCache:
     move.l  #0x00000101,%d0                 |; enable data & instruction cache
     movec   %d0,%cacr                       |; write to cache control register
+    debugPrintStrI "Cache enabled\r\n"
+
+kInitConsoles:
+    |; initialize user console ports
+    debugPrintStrI "Initializing user console ports ... "
+    lea     tblUserConIn,%a0                |; get pointer to user console pointer table
+    move.l  MAXUSERS-1,%d0                  |; get number of users
+1:
+    move.l  %a0@(%d0.l:4),%a1               |; get pointer to console device
+    move.b  #0x07,%a1@(comRegFCR)           |; enable FIFO
+    move.b  #0x03,%a1@(comRegLCR)           |; set 8N1
+    move.b  #0x00,%a1@(comRegIER)           |; disable interrupts
+    move.b  #0x83,%a1@(comRegLCR)           |; enable divisor registers
+    move.b  #0x0c,%a1@(comRegDivLo)         |; set divisor for 9600bps from 1.8432MHz oscillator
+    move.b  #0x00,%a1@(comRegDivHi)         |;
+    move.b  #0x03,%a1@(comRegLCR)           |; disable divisor registers
+    dbra    %d0,1b                          |; initialize all users' console ports
+    debugPrintStrI "OK\r\n"
 
     |; load BASIC into RAM
 kBasicLoader:
+    debugPrintStrI "Loading BASIC from ROM ... "
     lea     ROMBASIC,%a0                    |; get pointer to BASIC in ROM
     lea     RAMBASIC,%a1                    |; get pointer to where BASIC will go in RAM
     move.l  #SIZEBASIC,%d0                  |; get size of BASIC in bytes
@@ -20,18 +42,22 @@ kBasicLoader:
 1:
     move.l  %a0@+,%a1@+                     |; copy BASIC into RAM one longword at a time
     dbra    %d0,1b                          |; keep copying until finished
+    debugPrintStrI "OK\r\n"
 
     |; initialize user data table
 kInit:
+    debugPrintStrI "Initializing user data table ... "
     move.l  #MAXUSERS-1,%d0                 |; start at end of user numbers
     lea     USERTABLE,%a0                   |; pointer to user table
 1:
     bsr     kUserTblInit                    |; initialize user
     dbra    %d0,1b                          |; initialize all users
+    debugPrintStrI "OK\r\n"
 
     |; initialize MMU?
 
     |; jump execution to first user program
+    debugPrintStrI "Starting execution at user 0\r\n"
     move.w  #0x0080,%sp@-                   |; push TRAP0 vector to system stack
     move.l  #BASICENTRY,%sp@-               |; push BASIC entry point to stack as return address
     move.w  #0,%sp@-                        |; push clear CCR to stack

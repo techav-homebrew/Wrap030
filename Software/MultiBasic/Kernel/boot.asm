@@ -1,12 +1,16 @@
 
     .section text,"ax"
 
+    .include "kmacros.inc"
+
     .global COLDBOOT
     .extern WARMBOOT
     .extern romBot
     .extern ramBot
     .extern overlayPort
     .extern ramTop
+
+    .equ        aciaSet, 0x15               |; 8N1,÷16 (38400),no interrupts
 
 |; cold boot entry
 COLDBOOT:
@@ -18,6 +22,12 @@ COLDBOOT:
 
 _clearOverlay:
     move.b      #0,overlayPort              |; disable startup overlay
+
+|; initialize the kernal console acia
+_initKernelConsole:
+    move.b      #3,acia1Com                 |; reset ACIA 1
+    move.b      #aciaSet,acia1Com           |; configure ACIA 1
+    debugPrintStrI  "\r\nWrap030 Cold Boot ...\r\n"
 
 _clearMainMem:
     lea         ramTop,%a0                  |; get pointer to top of memory space
@@ -35,12 +45,13 @@ _copyVectors:
 1:
     move.l      %a1@+,%a0@+                 |; copy vector
     dbra        %d0,1b                      |; copy all vectors
-
+    jmp         WARMBOOT
 
 |; our cold/warm boot test clobbered the iniital stack pointer
 |; restore it to avoid any potential problems in case of an unexpected reset
 |; on cold boot this is redundant, but won't hurt anything
 _doWarm:
     move.l      romBot,ramBot               |; copy vector 0
+    debugPrintStrI  "\r\nWrap030 Warm Boot ... \r\n"
     jmp         WARMBOOT
 
