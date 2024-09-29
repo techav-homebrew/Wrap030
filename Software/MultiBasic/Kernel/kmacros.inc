@@ -1,6 +1,6 @@
 
 
-
+|;    .equ    SIMULATE,1
 
 |; macro for printing an immediate character to the kernel console
     .macro  debugPrintCharI char
@@ -11,6 +11,21 @@ L\@lp:
     .endm
 
 |; macro for printing an immediate string to the kernel console
+
+.ifdef  SIMULATE
+    .macro  debugPrintStrI  str
+    movem.l %a1/%d0,%sp@-                   |; save working registers
+    move.w  #14,%d0                         |; simulator trap 14 (printstring)
+    lea     %pc@(L\@Str),%a1                |; get pointer to string
+    trap    #15                             |; simulator system call
+    bra     L\@mexit                        |; skip to end of macro
+L\@Str:
+    .ascii  "\str\0"                        |; immediate string to print
+    .even                                   |; word-align
+L\@mexit:
+    movem.l %sp@+,%a1/%d0                   |; restore working registers
+    .endm
+.else
     .macro  debugPrintStrI  str
     movem.l %a0/%d0,%sp@-                   |; save working registers
     lea     %pc@(L\@Str),%a0                |; get pointer to string
@@ -28,6 +43,7 @@ L\@Str:
 L\@mexit:
     movem.l %sp@+,%a0/%d0                    |; restore working registers
     .endm
+.endif
 
 |; macro for pointing a string in A0 to the kernel console
     .macro  debugPrintStr

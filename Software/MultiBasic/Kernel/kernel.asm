@@ -11,17 +11,23 @@
 WARMBOOT:
     |; enable CPU cache
 kEnableCache:
+.ifndef     SIMULATE
     move.l  #0x00000101,%d0                 |; enable data & instruction cache
     movec   %d0,%cacr                       |; write to cache control register
+.endif
     debugPrintStrI "Cache enabled\r\n"
 
 kInitConsoles:
     |; initialize user console ports
     debugPrintStrI "Initializing user console ports ... "
+.ifndef     SIMULATE
     lea     tblUserConIn,%a0                |; get pointer to user console pointer table
-    move.l  MAXUSERS-1,%d0                  |; get number of users
+    move.l  #MAXUSERS-1,%d0                 |; get number of users
 1:
-    move.l  %a0@(%d0.l:4),%a1               |; get pointer to console device
+    |;move.l  %a0@(%d0.l:4),%a1               |; get pointer to console device
+    move.l  %d0,%d1                         |; copy current user number
+    lsl.l   #2,%d1                          |; offset to a longword count
+    move.l  %a0@(%d1.L),%a1                 |; read pointer from table
     move.b  #0x07,%a1@(comRegFCR)           |; enable FIFO
     move.b  #0x03,%a1@(comRegLCR)           |; set 8N1
     move.b  #0x00,%a1@(comRegIER)           |; disable interrupts
@@ -30,6 +36,7 @@ kInitConsoles:
     move.b  #0x00,%a1@(comRegDivHi)         |;
     move.b  #0x03,%a1@(comRegLCR)           |; disable divisor registers
     dbra    %d0,1b                          |; initialize all users' console ports
+.endif
     debugPrintStrI "OK\r\n"
 
     |; load BASIC into RAM
@@ -242,7 +249,7 @@ doSysTrapConWrite:
 
 
 
-
+    .even
 KernelTables:
 
 
