@@ -2,6 +2,14 @@
 
 |;    .equ    SIMULATE,1
 
+|; macro for printing a character from register to kernel console
+    .macro debugPrintChar regIn
+L\@lp:
+    btst    #1,acia1Com                     |; check ACIA txrdy bit
+    beq.s   L\@lp                           |; loop until ready
+    move.b  \regIn,acia1Dat                 |; send char
+    .endm
+
 |; macro for printing an immediate character to the kernel console
     .macro  debugPrintCharI char
 L\@lp:
@@ -46,7 +54,7 @@ L\@mexit:
 .endif
 
 |; macro for pointing a string in A0 to the kernel console
-    .macro  debugPrintStr
+    .macro debugPrintStr
     move.l  %d0,%sp@-                       |; save working register
 L\@nxtChr:
     move.b  %a0@+,%d0                       |; get next byte in string
@@ -59,3 +67,43 @@ L\@lp:
 L\@mexit:
     move.l  %sp@+,%d0                       |; restore working register
     .endm
+
+|; macro to print a single nybble. clobbers register
+    .macro debugPrintHexNyb regIn
+    and.b   #0x0f,\regIn                    |; mask out low nybble
+    cmpi.b  #0x0a,\regIn                    |; check if [0-9] or [a-f]
+    blt.s   L\@num                          |; jump ahead if [0-9]
+    add.b   #0x37,\regIn                    |; make ascii letter
+    bra.s   L\@prt                          |; jump ahead to print is
+L\@num:
+    add.b   #0x30,\regIn                    |; make ascii number
+L\@prt:
+    debugPrintChar \regIn                   |; print it
+    .endm
+
+|; macro to print a single byte
+    .macro debugPrintHexByte regIn
+    move.w  \regIn,%sp@-                    |; save register
+    ror.b   #4,\regIn                       |; move high nybble into position
+    debugPrintHexNyb \regIn                 |; print high nybble
+    move.w  %sp@,\regIn                     |; restore register
+    debugPrintHexNyb \regIn                 |; print low nybble
+    move.w  %sp@+,\regIn                    |; restore register
+    .endm
+
+|; macro to print a word
+    .macro debugPrintHexWord regIn 
+    ror.w   #8,\regIn                       |; rotate high byte into position
+    debugPrintHexByte \regIn                |; print it
+    ror.w   #8,\regIn                       |; rotate low byte back into position
+    debugPrintHexByte                       |; print it
+    .endm
+
+|; macro to print a longword
+    .macro debugPrintHexLong regIn
+    swap    \regIn                         |; rotate high word into position
+    debugPrintHexWord \regIn               |; print it
+    swap    \regIn                         |; rotate low word back into position
+    debugPrintHexWord \regIn               |; print it
+    .endm
+

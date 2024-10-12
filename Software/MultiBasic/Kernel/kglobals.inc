@@ -1,4 +1,4 @@
-MAXUSERS = 8
+MAXUSERS = 4
 
     .global USERTABLE
     .global USERNUM

@@ -36,18 +36,18 @@ ideAltStatusRO      = ideControl + 0xC;
 ideDevControlWO     = ideControl + 0xC;
 ideDevAddressRO     = ideControl + 0xE;
 
-comRegRX    = (0*8); /* Receive Buffer Register (read only) (Requires LCR DLAB clear) */
-comRegTX    = (0*8); /* Transmit Holding Register (write only) (Requires LCR DLAB clear) */
-comRegIER   = (1*8); /* Interrupt Enable Register */
-comRegIIR   = (2*8); /* Interrupt Identification Register (read only) */
-comRegFCR   = (2*8); /* FIFO Control Register (write only) */
-comRegLCR   = (3*8); /* Line Control Register */
-comRegMCR   = (4*8); /* Modem Control Register */
-comRegLSR   = (5*8); /* Line Status Register */
-comRegMSR   = (6*8); /* Modem Status Register */
-comRegSPR   = (7*8); /* Scratch Pad Register */
-comRegDivLo = (0*8); /* Divisor Latch Register LSB (Requires LCR DLAB set) */
-comRegDivHi = (1*8); /* Divisor Latch Register MSB (Requires LCR DLAB set) */
+comRegRX    = (0); /* Receive Buffer Register (read only) (Requires LCR DLAB clear) */
+comRegTX    = (0); /* Transmit Holding Register (write only) (Requires LCR DLAB clear) */
+comRegIER   = (1); /* Interrupt Enable Register */
+comRegIIR   = (2); /* Interrupt Identification Register (read only) */
+comRegFCR   = (2); /* FIFO Control Register (write only) */
+comRegLCR   = (3); /* Line Control Register */
+comRegMCR   = (4); /* Modem Control Register */
+comRegLSR   = (5); /* Line Status Register */
+comRegMSR   = (6); /* Modem Status Register */
+comRegSPR   = (7); /* Scratch Pad Register */
+comRegDivLo = (0); /* Divisor Latch Register LSB (Requires LCR DLAB set) */
+comRegDivHi = (1); /* Divisor Latch Register MSB (Requires LCR DLAB set) */
 
 io8base     = 0x80000000;
 io8card0    = io8base;
@@ -77,18 +77,6 @@ uMemSize4   = uMemSize;
 uMemSize5   = uMemSize;
 uMemSize6   = uMemSize;
 uMemSize7   = uMemSize;
-
-/*
-uMemStart   = 0x00100000;
-uMemStart0  = uMemStart;
-uMemStart1  = uMemStart0 + uMemSize;
-uMemStart2  = uMemStart1 + uMemSize;
-uMemStart3  = uMemStart2 + uMemSize;
-uMemStart4  = uMemStart3 + uMemSize;
-uMemStart5  = uMemStart4 + uMemSize;
-uMemStart6  = uMemStart5 + uMemSize;
-uMemStart7  = uMemStart6 + uMemSize;
-*/
 
 ENTRY(COLDBOOT)
 SECTIONS{
@@ -133,21 +121,23 @@ SECTIONS{
     {
         STACKINIT = . ;
         uMemStart = . ;
+        
         uMemStart0 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize0;
         uMemStart1 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize1;
         uMemStart2 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize2;
         uMemStart3 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize3;
         uMemStart4 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize4;
         uMemStart5 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize5;
         uMemStart6 = . ;
-        . = ALIGN(uMemSize);
+        . += uMemSize6;
         uMemStart7 = . ;
+        . += uMemSize7;
     } > ram
 }
 

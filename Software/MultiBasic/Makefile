@@ -47,8 +47,10 @@ OBJS = $(patsubst %.asm,%.o,$(SRCS))
 
 $(info DEBUG $(OBJS))
 
-all: rom.out
+rom.srec: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
+	$(OC) $(OCFLAGS) rom.out -O ihex rom.hex
+	$(OC) $(OCFLAGS) rom.out -O binary rom.bin
 
 rom.out: $(OBJS)
 	$(LD) $(LDFLAGS) -Map rom.map -o rom.out $^
@@ -61,4 +63,8 @@ $(OBJS): $(SRCS)
 clean: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
+	-$(RM) *.o *.out *.L68 *.srec *.map *.i *.hex *.bin
 .PHONY: clean $(SUBDIRS)
+
+burn: rom.srec
+	$(PYTHON) ..\..\Utilities\srecLoadRAMwin.py COM6 rom.srec

@@ -11,11 +11,11 @@
 WARMBOOT:
     |; enable CPU cache
 kEnableCache:
-.ifndef     SIMULATE
-    move.l  #0x00000101,%d0                 |; enable data & instruction cache
-    movec   %d0,%cacr                       |; write to cache control register
-.endif
-    debugPrintStrI "Cache enabled\r\n"
+|;.ifndef     SIMULATE
+|;    move.l  #0x00000101,%d0                 |; enable data & instruction cache
+|;    movec   %d0,%cacr                       |; write to cache control register
+|;.endif
+|;    debugPrintStrI "Cache enabled\r\n"
 
 kInitConsoles:
     |; initialize user console ports
@@ -32,7 +32,7 @@ kInitConsoles:
     move.b  #0x03,%a1@(comRegLCR)           |; set 8N1
     move.b  #0x00,%a1@(comRegIER)           |; disable interrupts
     move.b  #0x83,%a1@(comRegLCR)           |; enable divisor registers
-    move.b  #0x0c,%a1@(comRegDivLo)         |; set divisor for 9600bps from 1.8432MHz oscillator
+    move.b  #0x18,%a1@(comRegDivLo)         |; set divisor for 9600bps from 3.6864MHz oscillator
     move.b  #0x00,%a1@(comRegDivHi)         |;
     move.b  #0x03,%a1@(comRegLCR)           |; disable divisor registers
     dbra    %d0,1b                          |; initialize all users' console ports
@@ -108,7 +108,8 @@ kUserTblInit:
     add.l   %d5,%d4                         |; calculate initial user stack pointer
     move.l  %d4,%a1@(utblRegA7)             |; 
 
-    lea     BASICENTRY,%a2                  |; set initial user PC to BASIC entry point
+    ;lea     BASICENTRY,%a2                  |; set initial user PC to BASIC entry point in ROM
+    lea     RAMBASIC,%a2                    |; get pointer to BASIC in RAM
     move.l  %a2,%a1@(utblRegPC)             |;
 
     rts
@@ -122,8 +123,14 @@ kUserTblInit:
 SysTrap:
     |; cmp.b   #0,%d1                          |; check for syscall 0
     |; all system calls start with implicit yield
-    beq     doSysTrapYield
+    debugPrintStrI  "T"
+    debugPrintHexByte %d1
+    debugPrintStrI ","
+    bra     doSysTrapYield
 SysTrapTbl:
+    debugPrintStrI  "t"
+    debugPrintHexByte %d1
+    debugPrintStrI  ","
     cmp.b   #SysTrapConRead,%d1                          |;
     beq     doSysTrapConRead
     cmp.b   #SysTrapConWrite,%d1
@@ -139,24 +146,37 @@ doSysTrapYield:
 |; save user state to user table
 SaveUserContext:
     movem.l %a0/%d0,%sp@-                   |; save A0 & D0 to system stack
+    debugPrintStrI  "S"
     lea     USERTABLE,%a0                   |; get pointer to user table
-    move.l  #USERNUM,%d0                    |; get current user number
+    move.l  USERNUM,%d0                     |; get current user number
     mulu    #utbl_size,%d0                  |; mult by table size to get offset
     adda.l  %d0,%a0                         |; get pointer to specific user table entry
-    move.l  %a0,%sp@-                       |; save pointer to system stack for later use
-    adda.l  #utblRegStore,%a0               |; get pointer to next address past data store
-    movem.l %a0-%a7/%d0-%d7,%sp@-           |; save all registers to data store
-    move.l  %sp@+,%a0                       |; restore pointer to start of user table entry
-    move.l  %sp@+,%a0@(utblRegD0)           |; save register D0 to user table
-    move.l  %sp@+,%a0@(utblRegA0)           |; save register A0 to user table
-    move.w  %sp@(0),%a0@(utblRegCCR)        |; save status register
-    move.l  %sp@(2),%a0@(utblRegPC)         |; save user program counter
-    move.l  %usp,%a1                        |; fetch user stack pointer
-    move.l  %a1,%a0@(utblRegA7)             |; save user stack pointer to user table
+
+    move.l  %a1,%a0@(utblRegA1)             |; the vervose way of saving all registers
+    move.l  %a2,%a0@(utblRegA2)
+    move.l  %a3,%a0@(utblRegA3)
+    move.l  %a4,%a0@(utblRegA4)
+    move.l  %a5,%a0@(utblRegA5)
+    move.l  %a6,%a0@(utblRegA6)
+    move.l  %d1,%a0@(utblRegD1)
+    move.l  %d2,%a0@(utblRegD2)
+    move.l  %d3,%a0@(utblRegD3)
+    move.l  %d4,%a0@(utblRegD4)
+    move.l  %d5,%a0@(utblRegD5)
+    move.l  %d6,%a0@(utblRegD6)
+    move.l  %d7,%a0@(utblRegD7)
+    movem.l %sp@+,%a1/%d0
+    move.l  %a1,%a0@(utblRegA1)
+    move.l  %d0,%a0@(utblRegD0)
+    move.l  %usp,%a1
+    move.l  %a1,%a0@(utblRegA7)
+    move.w  %sp@,%a0@(utblRegCCR)
+    move.l  %sp@(2),%a0@(utblRegPC)
 
 
 NextUser:
     |; get user number
+    debugPrintStrI  "N"
     move.l  USERNUM,%d0                     |;
     addq.l  #1,%d0                          |; increment user number
     cmp.l   #MAXUSERS,%d0                   |; is this the last user?
@@ -164,33 +184,46 @@ NextUser:
     moveq.l #0,%d0                          |; loop back around to first user
 1:
     move.l  %d0,USERNUM                     |; save new user number
+    debugPrintStrI  "\r\nU:"
+    debugPrintHexByte %d0
 
 
+    
 |; restore context for user in D0
 RestoreUserContext:
+    debugPrintStrI  "R"
     mulu    #utbl_size,%d0                  |; shift user number to table offset
     lea     USERTABLE,%a0                   |; get user table pointer again
     add.l   %d0,%a0                         |; add user offset
-    move.l  %a0,%sp@-                       |; save pointer
+    
 
-    |; update MMU table
+    move.l  %a0@(utblRegA7),%a1             |; restore all registers
+    move.l  %a1,%usp
+    move.w  %a0@(utblRegCCR),%sp@
+    move.l  %a0@(utblRegPC),%sp@(2)
+    move.l  %a0@(utblRegA1),%a1
+    move.l  %a0@(utblRegA2),%a2
+    move.l  %a0@(utblRegA3),%a3
+    move.l  %a0@(utblRegA4),%a4
+    move.l  %a0@(utblRegA5),%a5
+    move.l  %a0@(utblRegA6),%a6
+    move.l  %a0@(utblRegD0),%d0
+    move.l  %a0@(utblRegD1),%d1
+    move.l  %a0@(utblRegD2),%d2
+    move.l  %a0@(utblRegD3),%d3
+    move.l  %a0@(utblRegD4),%d4
+    move.l  %a0@(utblRegD5),%d5
+    move.l  %a0@(utblRegD6),%d6
+    move.l  %a0@(utblRegD7),%d7
+    move.l  %a0@(utblRegA0),%a0             |; restore A0 last since it's our table pointer
 
-    |; restore user status
-    lea     %a0@(utblRegA7),%a0             |; start by pointing to A7
-    move.l  %a0@,%a1                        |; get user stack pointer
-    move.l  %a1,%usp                        |; restore user stack pointer
-    lea     %a0@(utblRegD0-utblRegA7),%a0   |; point to beginning of user registers
-    movem.l %a0@+,%d0-%D7                   |; restore data registers
-    add.l   #4,%a0                          |; skip past A0
-    movem.l %a0@+,%a1-%a6                   |; restore A1-A6
-    move.l  %sp@+,%a0                       |; revert pointer back to beginning of table
-
-    move.w  %a0@(utblRegCCR),%sp@(0)        |; restore status register to exception frame
-    move.l  %a0@(utblRegPC),%sp@(2)         |; restore user PC to exception frame
-
-    move.l  %a0@(utblRegA0),%a0             |; restore A0 last and we're done
 
     |; at the end of all this, check D1 to see if we have a pending syscall
+
+    debugPrintStrI "r"
+    debugPrintHexByte %d1
+    debugPrintStrI ","
+
     cmp.b   #0,%d1                          |; if not 0 then jump to syscall table
     bne     SysTrapTbl
 
@@ -204,9 +237,11 @@ RestoreUserContext:
 
 doSysTrapConRead:
     movem.l %a0/%d0,%sp@-                   |; save working registers
+    debugPrintStrI  "rx"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get user number
-    lsl.l   #7,%d0                          |; shift to offset in table
+    |;lsl.l   #7,%d0                          |; shift to offset in table
+    mulu    #utbl_size,%d2                  |; shift to offset in table
     add.l   %d0,%a0                         |; pointer to user table entry
     move.l  %a0@(utblConIn),%a0             |; get pointer to console device
 
@@ -219,25 +254,34 @@ doSysTrapConRead:
     andi.w  #0xfffe,%sp@(0)                 |; clear carry on saved status register
     rte
 1:                                          |; RXREADY
+    move.b  %a0@(comRegRX),%d0              |; read byte from console
+    debugPrintStrI "$"
+    debugPrintChar %d0
+    debugPrintStrI ";"
     movem.l %sp@+,%a0/%d0                   |; restore working registers
     ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
     rte
 
 doSysTrapConWrite:
     movem.l %a0/%d2,%sp@-                   |; save working registers
+    debugPrintStrI  "tx"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d2                     |; get user number
-    lsl.l   #7,%d2                          |; shift to offset in table
+    |;lsl.l   #7,%d2                          |; shift to offset in table
+    mulu    #utbl_size,%d2                  |; shift to offset in table
     add.l   %d2,%a0                         |; pointer to user table entry
     move.l  %a0@(utblConOut),%a0            |; get pointer to console device
 
     |; this is where we should be using device drivers, but for now we'll just
     |; hard code a driver for 16c550
-    btst    #5,%a0@(comRegMSR)              |; check if terminal ready (DTR)
-    beq     1f                              |; jump ahead to TXNOTREADY
+    |;btst    #5,%a0@(comRegMSR)              |; check if terminal ready (DTR)
+    |;beq     1f                              |; jump ahead to TXNOTREADY
     btst    #5,%a0@(comRegLSR)              |; check if ready to transmit
     beq     1f                              |; jump ahead to TXNOTREADY
     move.b  %d0,%a0@(comRegTX)              |; write character to com port
+    debugPrintStrI "$"
+    debugPrintChar %d0
+    debugPrintStrI ";"
     movem.l %sp@+,%a0/%d2                   |; restore working registers
     rte
 1:                                          |; TXNOTREADY

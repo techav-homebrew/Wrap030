@@ -110,7 +110,7 @@
 
 VEC_OUT:
     move.l  %d1,%sp@-                       |; save the syscall register
-    moveq.l #SysTrapConWrite,%d0            |; console write system call
+    moveq.l #SysTrapConWrite,%d1            |; console write system call
     trap    #0                              |; do system call
     move.l  %sp@+,%d1                       |; restore register
     rts
