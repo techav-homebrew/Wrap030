@@ -99,8 +99,27 @@
     .global FAC2_e
 
     .even
-    BRA     BASICENTRY                      |; For convenience, so you can start from first address
 
+printBasicHeader:
+    |; going to try to print a static header here
+    move.l  %d0,%sp@-                       |; save memory size
+    lea     %pc@(loadStr),%a2               |; get pointer to header string
+1:
+    move.b  %a2@+,%d0                       |; get byte from string
+    cmpi.b  #0,%d0                          |; check if null
+    beq     goStart                         |; if null, then go ahead and start BASIC
+2:  
+    bsr     VEC_OUT                         |; print it
+    bra     1b                              |; go print next character
+
+
+    
+loadStr:
+    .ascii  "\r\nInitializing BASIC ... \r\n\0"
+    .even
+goStart:
+    move.l  %sp@+,%d0                       |; restore memory size
+    BRA     BASICENTRY                      |; For convenience, so you can start from first address
 
 /***********************************************************************************/
 #
@@ -124,7 +143,14 @@ VEC_IN:
     move.l  %d1,%sp@-                       |; save system call register
     moveq.l #SysTrapConRead,%d1             |; console read system call
     trap    #0                              |; do system call
+    cmpi.b  #0,%d0                          |; check if result is null
+    bne     RXREADY                         |; 
+    move.l  %sp@+,%d1                       |; restore working register & clear CCR
+    andi.b  #0xfe,%ccr                      |; clear carry flag - no char available
+    rts
+RXREADY:
     move.l  %sp@+,%d1                       |; restore working register
+    ori.b   #1,%ccr                         |; set carry flag - char available
     rts
 
 /***********************************************************************************/
@@ -832,7 +858,10 @@ LAB_1359:
     JSR     V_INPT(%a3)                     |; call scan input device
     BCC     LAB_1359                        |; loop if no byte
 
+    CMP.B   #0,%d0
     BEQ     LAB_1359                        |; loop if null byte
+
+    move.b  #'>',acia1Dat
 
     CMP.b   #0x07,%d0                       |; compare with [BELL]
     BEQ     LAB_1378                        |; branch if [BELL]
@@ -5775,39 +5804,39 @@ LAB_2953:
 |; print %d0 as unsigned integer
 
 LAB_295E:
-    LEA     Bin2dec(%pc),%a1        |; get table address
-    MOVE.L  #0,%d1                |; table index
-    LEA     Usdss(%a3),%a0        |; output string start
-    MOVE.l  %d1,%d2                |; output string index
+    LEA     Bin2dec(%pc),%a1                |; get table address
+    MOVE.L  #0,%d1                          |; table index
+    LEA     Usdss(%a3),%a0                  |; output string start
+    MOVE.l  %d1,%d2                         |; output string index
 LAB_2967:
-    MOVE.l  (%a1,%d1.w),%d3        |; get table value
+    MOVE.l  (%a1,%d1.w),%d3                 |; get table value
     BEQ     LAB_2969                        |; exit if end marker
 
-    MOVE.L  #'0'-1,%d4                        |; set character to "0"-1
+    MOVE.L  #'0'-1,%d4                      |; set character to "0"-1
 LAB_2968:
-    ADDQ.w  #1,%d4                |; next numeric character
-    SUB.l   %d3,%d0                |; subtract table value
+    ADDQ.w  #1,%d4                          |; next numeric character
+    SUB.l   %d3,%d0                         |; subtract table value
     BPL     LAB_2968                        |; not overdone so loop
 
-    ADD.l   %d3,%d0                |; correct value
-    MOVE.b  %d4,(%a0,%d2.w)        |; character out to string
-    ADDQ.w  #4,%d1                |; increment table pointer
-    ADDQ.w  #1,%d2                |; increment output string pointer
+    ADD.l   %d3,%d0                         |; correct value
+    MOVE.b  %d4,(%a0,%d2.w)                 |; character out to string
+    ADDQ.w  #4,%d1                          |; increment table pointer
+    ADDQ.w  #1,%d2                          |; increment output string pointer
     BRA     LAB_2967                        |; loop
 
 LAB_2969:
     ADD.b   #'0',%d0                        |; make last character
-    MOVE.b  %d0,(%a0,%d2.w)        |; character out to string
-    SUBQ.w  #1,%a0                |; decrement %a0 (allow simple loop)
+    MOVE.b  %d0,(%a0,%d2.w)                 |; character out to string
+    SUBQ.w  #1,%a0                          |; decrement %a0 (allow simple loop)
 
-                            |; now find non zero start of string
+                                            |; now find non zero start of string
 LAB_296A:
-    ADDQ.w  #1,%a0                |; increment %a0 (this will never carry to b16)
-    LEA     BHsend-1(%a3),%a1        |; get string end
-    CMPA.l  %a1,%a0                |; are we at end
+    ADDQ.w  #1,%a0                          |; increment %a0 (this will never carry to b16)
+    LEA     BHsend-1(%a3),%a1               |; get string end
+    CMPA.l  %a1,%a0                         |; are we at end
     BEQ     LAB_18C3                        |; if so print null terminated string and RETURN
 
-    CMPI.b  #'0',(%a0)                        |; is character "0" ?
+    CMPI.b  #'0',(%a0)                      |; is character "0" ?
     BEQ     LAB_296A                        |; loop if so
 
     BRA     LAB_18C3                        |; print null terminated string from memory & RET

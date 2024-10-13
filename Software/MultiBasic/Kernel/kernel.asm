@@ -28,7 +28,8 @@ kInitConsoles:
     move.l  %d0,%d1                         |; copy current user number
     lsl.l   #2,%d1                          |; offset to a longword count
     move.l  %a0@(%d1.L),%a1                 |; read pointer from table
-    move.b  #0x07,%a1@(comRegFCR)           |; enable FIFO
+    |;move.b  #0x07,%a1@(comRegFCR)           |; enable FIFO
+    move.b  #0x06,%a1@(comRegFCR)           |; disable FIFO
     move.b  #0x03,%a1@(comRegLCR)           |; set 8N1
     move.b  #0x00,%a1@(comRegIER)           |; disable interrupts
     move.b  #0x83,%a1@(comRegLCR)           |; enable divisor registers
@@ -279,12 +280,11 @@ RestoreUserContext:
 
 
 doSysTrapConRead:
-    movem.l %a0/%d0,%sp@-                   |; save working registers
+    move.l  %a0,%sp@-                       |; save working registers
     debugPrintStrI  "rx"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get user number
-    |;lsl.l   #7,%d0                          |; shift to offset in table
-    mulu    #utbl_size,%d2                  |; shift to offset in table
+    mulu    #utbl_size,%d0                  |; shift to offset in table
     add.l   %d0,%a0                         |; pointer to user table entry
     move.l  %a0@(utblConIn),%a0             |; get pointer to console device
 
@@ -293,16 +293,17 @@ doSysTrapConRead:
     btst    #0,%a0@(comRegLSR)              |; read com port status bit
     bne     1f                              |; jump ahead to RXREADY
     
-    movem.l %sp@+,%a0/%d0                   |; restore working registers
-    andi.w  #0xfffe,%sp@(0)                 |; clear carry on saved status register
+    move.l  %sp@+,%a0                       |; restore working registers
+    move.b  #0,%d0                          |; clear d0
+    |; andi.w  #0xfffe,%sp@(0)                 |; clear carry on saved status register
     rte
 1:                                          |; RXREADY
     move.b  %a0@(comRegRX),%d0              |; read byte from console
     debugPrintStrI "$"
     debugPrintHexByte %d0
     debugPrintStrI ";"
-    movem.l %sp@+,%a0/%d0                   |; restore working registers
-    ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
+    move.l  %sp@+,%a0                       |; restore working registers
+    |; ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
     rte
 
 doSysTrapConWrite:
@@ -310,7 +311,6 @@ doSysTrapConWrite:
     debugPrintStrI  "tx"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d2                     |; get user number
-    |;lsl.l   #7,%d2                          |; shift to offset in table
     mulu    #utbl_size,%d2                  |; shift to offset in table
     add.l   %d2,%a0                         |; pointer to user table entry
     move.l  %a0@(utblConOut),%a0            |; get pointer to console device
