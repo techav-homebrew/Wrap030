@@ -163,18 +163,18 @@ kUserTblInit:
 SysTrap:
     |; cmp.b   #0,%d1                          |; check for syscall 0
     |; all system calls start with implicit yield
-    debugPrintStrI  "T"
-    debugPrintHexByte %d0
-    debugPrintStrI ","
-    debugPrintHexByte %d1
-    debugPrintStrI ";"
+    |;debugPrintStrI  "T"
+    |;debugPrintHexByte %d0
+    |;debugPrintStrI ","
+    |;debugPrintHexByte %d1
+    |;debugPrintStrI ";"
     bra     doSysTrapYield
 SysTrapTbl:
-    debugPrintStrI  "t"
-    debugPrintHexByte %d0
-    debugPrintStrI ","
-    debugPrintHexByte %d1
-    debugPrintStrI ";"
+    |;debugPrintStrI  "t"
+    |;debugPrintHexByte %d0
+    |;debugPrintStrI ","
+    |;debugPrintHexByte %d1
+    |;debugPrintStrI ";"
     cmp.b   #SysTrapConRead,%d1                          |;
     beq     doSysTrapConRead
     cmp.b   #SysTrapConWrite,%d1
@@ -264,9 +264,9 @@ RestoreUserContext:
 
     |; at the end of all this, check D1 to see if we have a pending syscall
 
-    debugPrintStrI "r"
-    debugPrintHexByte %d1
-    debugPrintStrI ","
+    |;debugPrintStrI "r"
+    |;debugPrintHexByte %d1
+    |;debugPrintStrI ","
 
     cmp.b   #0,%d1                          |; if not 0 then jump to syscall table
     bne     SysTrapTbl
@@ -281,7 +281,7 @@ RestoreUserContext:
 
 doSysTrapConRead:
     move.l  %a0,%sp@-                       |; save working registers
-    debugPrintStrI  "rx"
+    |;debugPrintStrI  "rx"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get user number
     mulu    #utbl_size,%d0                  |; shift to offset in table
@@ -299,16 +299,16 @@ doSysTrapConRead:
     rte
 1:                                          |; RXREADY
     move.b  %a0@(comRegRX),%d0              |; read byte from console
-    debugPrintStrI "$"
-    debugPrintHexByte %d0
-    debugPrintStrI ";"
+    |;debugPrintStrI "$"
+    |;debugPrintHexByte %d0
+    |;debugPrintStrI ";"
     move.l  %sp@+,%a0                       |; restore working registers
     |; ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
     rte
 
 doSysTrapConWrite:
     movem.l %a0/%d2,%sp@-                   |; save working registers
-    debugPrintStrI  "tx"
+    |;debugPrintStrI  "tx"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d2                     |; get user number
     mulu    #utbl_size,%d2                  |; shift to offset in table
@@ -322,9 +322,9 @@ doSysTrapConWrite:
     btst    #5,%a0@(comRegLSR)              |; check if ready to transmit
     beq     1f                              |; jump ahead to TXNOTREADY
     move.b  %d0,%a0@(comRegTX)              |; write character to com port
-    debugPrintStrI "$"
-    debugPrintHexByte %d0
-    debugPrintStrI ";"
+    |;debugPrintStrI "$"
+    |;debugPrintHexByte %d0
+    |;debugPrintStrI ";"
     movem.l %sp@+,%a0/%d2                   |; restore working registers
     rte
 1:                                          |; TXNOTREADY

@@ -861,7 +861,7 @@ LAB_1359:
     CMP.B   #0,%d0
     BEQ     LAB_1359                        |; loop if null byte
 
-    move.b  #'>',acia1Dat
+    |;move.b  #'>',acia1Dat
 
     CMP.b   #0x07,%d0                       |; compare with [BELL]
     BEQ     LAB_1378                        |; branch if [BELL]
