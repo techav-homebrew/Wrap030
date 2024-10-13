@@ -195,7 +195,7 @@ SaveUserContext:
     mulu    #utbl_size,%d0                  |; mult by table size to get offset
     adda.l  %d0,%a0                         |; get pointer to specific user table entry
 
-    move.l  %a1,%a0@(utblRegA1)             |; the vervose way of saving all registers
+    move.l  %a1,%a0@(utblRegA1)             |; the verbose way of saving all registers
     move.l  %a2,%a0@(utblRegA2)
     move.l  %a3,%a0@(utblRegA3)
     move.l  %a4,%a0@(utblRegA4)
@@ -208,8 +208,8 @@ SaveUserContext:
     move.l  %d5,%a0@(utblRegD5)
     move.l  %d6,%a0@(utblRegD6)
     move.l  %d7,%a0@(utblRegD7)
-    movem.l %sp@+,%a1/%d0
-    move.l  %a1,%a0@(utblRegA1)
+    movem.l %sp@+,%a1/%d0                   |; fetch A0 & D0 saved to stack earlier
+    move.l  %a1,%a0@(utblRegA0)
     move.l  %d0,%a0@(utblRegD0)
     move.l  %usp,%a1
     move.l  %a1,%a0@(utblRegA7)
