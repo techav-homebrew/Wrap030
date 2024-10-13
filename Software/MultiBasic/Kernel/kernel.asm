@@ -77,6 +77,45 @@ kInit:
 
 |; initialize user table in A0 for user number in D0
 kUserTblInit:
+/*
+    move.l  %d0,%d1                         |; copy user number
+    move.l  #utbl_size,%d2                  |; get size of user table entry
+    mulu    %d2,%d1                         |; get user entry offset
+    lea     %a0@(%d1.l),%a1                 |; get pointer to this user's table entry
+    eor.l   %d3,%d3                         |; clear D3 for initializing table entries
+    lsr.l   #2,%d2                          |; convert byte count to word count
+    move.l  %d2,%d4                         |; copy for later use
+1:
+    move.l  %d3,%a1@(%d2.l)                 |; clear entire user table entry
+    dbra    %d2,1b                          |; loop until entire entry cleared
+
+    lea     tblUserConIn,%a2                |; get pointer to user console in table
+    move.l  %a2@(%d4.l),%a1@(utblConIn)     |; get user's console in pointer
+
+    lea     tblUserConOut,%a2               |; get pointer to user console out table
+    move.l  %a2@(%d4.l),%a1@(utblConOut)    |; get user's console out pointer
+
+    lea     tblUserMem,%a2                  |; get pointer to user memory start table
+    move.l  %a2@(%d4.l),%d5                 |; get user's memory region start pointer
+    move.l  %d5,%a1@(utblMemPtr)            |; save to user table
+    move.l  %d5,%a1@(utblRegA0)             |; also copy to user A0 to initialize BASIC
+
+    lea     tblUserMemSize,%a2              |; get pointer to user memory size table
+    move.l  %a2@(%d4.l),%d6                 |; get user's memory size
+    move.l  %d6,%a1@(utblMemLen)            |; save to user table
+    move.l  %d6,%a1@(utblRegD0)             |; also copy to user D0 to initialize BASIC
+
+    add.l   %d5,%d6                         |; calculate initial user stack pointer
+    move.l  %d6,%a1@(utblRegA7)             |; save to user A7
+
+    lea     RAMBASIC,%a2                    |; get pointer to BASIC in RAM
+    move.l  %a2,%a1@(utblRegPC)             |; save to user initial PC
+
+    rts
+*/
+
+
+
     move.l  %d0,%d1                         |; copy user number
     mulu    #utbl_size,%d1                  |; multiply by table entry size to get offset
     lea     %a0@(%d1.l),%a1                 |; get pointer to this user's table entry
@@ -124,13 +163,17 @@ SysTrap:
     |; cmp.b   #0,%d1                          |; check for syscall 0
     |; all system calls start with implicit yield
     debugPrintStrI  "T"
-    debugPrintHexByte %d1
+    debugPrintHexByte %d0
     debugPrintStrI ","
+    debugPrintHexByte %d1
+    debugPrintStrI ";"
     bra     doSysTrapYield
 SysTrapTbl:
     debugPrintStrI  "t"
+    debugPrintHexByte %d0
+    debugPrintStrI ","
     debugPrintHexByte %d1
-    debugPrintStrI  ","
+    debugPrintStrI ";"
     cmp.b   #SysTrapConRead,%d1                          |;
     beq     doSysTrapConRead
     cmp.b   #SysTrapConWrite,%d1
@@ -256,7 +299,7 @@ doSysTrapConRead:
 1:                                          |; RXREADY
     move.b  %a0@(comRegRX),%d0              |; read byte from console
     debugPrintStrI "$"
-    debugPrintChar %d0
+    debugPrintHexByte %d0
     debugPrintStrI ";"
     movem.l %sp@+,%a0/%d0                   |; restore working registers
     ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
@@ -280,7 +323,7 @@ doSysTrapConWrite:
     beq     1f                              |; jump ahead to TXNOTREADY
     move.b  %d0,%a0@(comRegTX)              |; write character to com port
     debugPrintStrI "$"
-    debugPrintChar %d0
+    debugPrintHexByte %d0
     debugPrintStrI ";"
     movem.l %sp@+,%a0/%d2                   |; restore working registers
     rte
