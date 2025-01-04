@@ -190,7 +190,7 @@ doSysTrapYield:
 |; save user state to user table
 SaveUserContext:
     movem.l %a0/%d0,%sp@-                   |; save A0 & D0 to system stack
-    debugPrintStrI  "S"
+    |;debugPrintStrI  "S"
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get current user number
     mulu    #utbl_size,%d0                  |; mult by table size to get offset
@@ -220,7 +220,7 @@ SaveUserContext:
 
 NextUser:
     |; get user number
-    debugPrintStrI  "N"
+    |;debugPrintStrI  "N"
     move.l  USERNUM,%d0                     |;
     addq.l  #1,%d0                          |; increment user number
     cmp.l   #MAXUSERS,%d0                   |; is this the last user?
@@ -228,14 +228,16 @@ NextUser:
     moveq.l #0,%d0                          |; loop back around to first user
 1:
     move.l  %d0,USERNUM                     |; save new user number
-    debugPrintStrI  "\r\nU:"
-    debugPrintHexByte %d0
+    |;debugPrintStrI  "\r\nU:"
+    |;debugPrintHexByte %d0
+    debugPrintHexNyb    %d0
+    move.l  USERNUM,%d0
 
 
     
 |; restore context for user in D0
 RestoreUserContext:
-    debugPrintStrI  "R"
+    |;debugPrintStrI  "R"
     mulu    #utbl_size,%d0                  |; shift user number to table offset
     lea     USERTABLE,%a0                   |; get user table pointer again
     add.l   %d0,%a0                         |; add user offset
