@@ -5,17 +5,59 @@
     .include    "kmacros.inc"
     .global     kUserTblInit
     .global     NextUser
+    .extern     _initKernelConsole
 
     .section text,"ax"
 
 WARMBOOT:
     |; enable CPU cache
 kEnableCache:
-|;.ifndef     SIMULATE
-|;    move.l  #0x00000101,%d0                 |; enable data & instruction cache
-|;    movec   %d0,%cacr                       |; write to cache control register
-|;.endif
-|;    debugPrintStrI "Cache enabled\r\n"
+.ifndef     SIMULATE
+    move.l  #0x00000101,%d0                 |; enable data & instruction cache
+    movec   %d0,%cacr                       |; write to cache control register
+.endif
+    debugPrintStrI "Cache enabled\r\n"
+
+/*
+    |; copy syscalls into RAM
+    |; we're just going to use the mmu table space for now
+kCopy:
+    debugPrintStrI "Loading kernel calls from ROM ... "
+    lea     kRAMstart,%a0                   |; get pointer to start of code
+    lea     kRAMend,%a1                     |; get pointer to end of code
+    lea     SysTrapRAM,%a2                  |; get pointer to target
+    |;movea.l %a2,%a3                         |; get a copy of the target address
+1:
+    move.l  %a0@+,%a2@+                     |; copy word
+    cmp.l   %a0,%a1                         |; check for end
+    ble.s   1b                              |; loop until complete
+
+    |; debug: check what we just copied
+    lea     SysTrapRAM,%a0
+    move.l  %a0,%d0
+    debugPrintHexLong %d0 
+    debugPrintStrI ":"
+    move.l  %a0@,%d0
+    debugPrintHexLong %d0 
+    debugPrintStrI " - "
+    lea     kRAMend,%a0
+    sub.l   #kRAMstart,%a0
+    add.l   #SysTrapRAM,%a0
+    subq.l  #4,%a0
+    move.l  %a0,%d0
+    debugPrintHexLong %d0 
+    debugPrintStrI ":"
+    move.l  %a0@,%d0
+    debugPrintHexLong %d0 
+    debugPrintStrI " v"
+    move.l  0x00000080,%d0
+    debugPrintHexLong %d0
+    debugPrintStrI " ... "
+
+    |;lea     %a3@(SysTrap),%a3               |; get relative pointer to sys trap
+    |;move.l  %a3,0x0080                      |; save new vector
+    debugPrintStrI "OK\r\n"
+*/
 
 kInitConsoles:
     |; initialize user console ports
@@ -33,13 +75,14 @@ kInitConsoles:
     move.b  #0x03,%a1@(comRegLCR)           |; set 8N1
     move.b  #0x00,%a1@(comRegIER)           |; disable interrupts
     move.b  #0x83,%a1@(comRegLCR)           |; enable divisor registers
-    move.b  #0x18,%a1@(comRegDivLo)         |; set divisor for 9600bps from 3.6864MHz oscillator
+    move.b  #0x0C,%a1@(comRegDivLo)         |; set divisor for 9600bps from 1.8432MHz oscillator
     move.b  #0x00,%a1@(comRegDivHi)         |;
     move.b  #0x03,%a1@(comRegLCR)           |; disable divisor registers
     dbra    %d0,1b                          |; initialize all users' console ports
 .endif
     debugPrintStrI "OK\r\n"
 
+/*
     |; load BASIC into RAM
 kBasicLoader:
     debugPrintStrI "Loading BASIC from ROM ... "
@@ -51,6 +94,7 @@ kBasicLoader:
     move.l  %a0@+,%a1@+                     |; copy BASIC into RAM one longword at a time
     dbra    %d0,1b                          |; keep copying until finished
     debugPrintStrI "OK\r\n"
+*/
 
     |; initialize user data table
 kInit:
@@ -65,7 +109,7 @@ kInit:
     |; initialize MMU?
 
     |; jump execution to first user program
-    debugPrintStrI "Starting execution at user 0\r\n"
+    debugPrintStrI "Starting execution at user 0\r\n\r\n> "
     move.w  #0x0080,%sp@-                   |; push TRAP0 vector to system stack
     move.l  #BASICENTRY,%sp@-               |; push BASIC entry point to stack as return address
     move.w  #0,%sp@-                        |; push clear CCR to stack
@@ -156,7 +200,7 @@ kUserTblInit:
 
 
 
-
+kRAMstart:
 
 
 |; system traps end up here
@@ -218,6 +262,10 @@ SaveUserContext:
     move.l  %sp@(2),%a0@(utblRegPC)
 
 
+
+    bsr     supvConsole                     |; check in on supervisor console
+
+
 NextUser:
     |; get user number
     |;debugPrintStrI  "N"
@@ -230,7 +278,7 @@ NextUser:
     move.l  %d0,USERNUM                     |; save new user number
     |;debugPrintStrI  "\r\nU:"
     |;debugPrintHexByte %d0
-    debugPrintHexNyb    %d0
+    |;debugPrintHexNyb    %d0
     move.l  USERNUM,%d0
 
 
@@ -336,9 +384,12 @@ doSysTrapConWrite:
     rte
 
 
-
-
     .even
+
+
+    .include "supervisor.inc"
+
+
 KernelTables:
 
 
@@ -382,4 +433,8 @@ tblUserMemSize:
     dc.l    uMemSize6
     dc.l    uMemSize7
 
+    .even
+kRAMend:
+    dc.l    0
+    
 

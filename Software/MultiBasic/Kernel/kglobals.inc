@@ -1,4 +1,4 @@
-MAXUSERS = 4
+MAXUSERS = 8
 
     .global USERTABLE
     .global USERNUM
@@ -7,6 +7,8 @@ MAXUSERS = 4
     .global SaveUserContext
     .global NextUser
     .global RestoreUserContext
+
+    .extern SysTrapRAM
 
     .extern ioCom0
     .extern ioCom1

@@ -4,7 +4,8 @@
     .include    "kmacros.inc"
     .extern STACKINIT
     .extern COLDBOOT
-    .extern SysTrap
+    |;.extern SysTrap
+    .extern SysTrapRAM
     .extern USERTABLE
     .extern USERNUM
     .extern kUserTblInit
@@ -37,6 +38,7 @@ vector:
     dc.l    exceptionType1      |; 30   078 autovector 6
     dc.l    exceptionType1      |; 31   07c autovector 7
     dc.l    SysTrap             |; 32   080 trap 0
+    |;dc.l    SysTrapRAM          |; 32   080 trap 0
     dc.l    exceptionType1      |; 33   084 trap 1
     dc.l    exceptionType1      |; 34   088 trap 2
     dc.l    exceptionType1      |; 35   08c trap 3
