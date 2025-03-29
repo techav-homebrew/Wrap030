@@ -5823,16 +5823,6 @@
 	)
 	(wire
 		(pts
-			(xy 127 83.82) (xy 127 91.44)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "25812e0f-7150-4b53-aa30-db3c35fe8fe4")
-	)
-	(wire
-		(pts
 			(xy 127 157.48) (xy 114.3 157.48)
 		)
 		(stroke
@@ -6310,16 +6300,6 @@
 			(type default)
 		)
 		(uuid "719bcbf4-edc4-4649-b508-a330ecf428ea")
-	)
-	(wire
-		(pts
-			(xy 127 96.52) (xy 127 101.6)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "73f46ad5-e84a-4c2b-b1ac-2e7b8c4fe8f4")
 	)
 	(wire
 		(pts
@@ -12390,72 +12370,6 @@
 	)
 	(symbol
 		(lib_id "power:+5VD")
-		(at 127 83.82 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "940ec324-3a1a-444f-a748-ede83b81d4a3")
-		(property "Reference" "#PWR025"
-			(at 127 87.63 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "+5VD"
-			(at 127 79.6869 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 127 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 127 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"+5VD\""
-			(at 127 83.82 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "b1c6b5e6-e9b8-4a42-a503-43173ffc5942")
-		)
-		(instances
-			(project "ATX-PSU_8b"
-				(path "/37d25dd6-4ee6-4a11-9ae8-e7d7c76201f7"
-					(reference "#PWR025")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:+5VD")
 		(at 149.86 73.66 0)
 		(unit 1)
 		(exclude_from_sim no)
@@ -14469,76 +14383,6 @@
 			(project "ATX-PSU_8b"
 				(path "/37d25dd6-4ee6-4a11-9ae8-e7d7c76201f7"
 					(reference "#PWR032")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Device:C_Small")
-		(at 127 93.98 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "eef8eaa8-bedb-497e-81b6-10693cac851c")
-		(property "Reference" "C3"
-			(at 129.3241 92.7741 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "100nF"
-			(at 129.3241 95.1984 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Capacitor_THT:C_Disc_D4.3mm_W1.9mm_P5.00mm"
-			(at 127 93.98 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 127 93.98 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Unpolarized capacitor, small symbol"
-			(at 127 93.98 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "7bf73d31-04c2-4cd2-8f86-ab1b1f2b1afc")
-		)
-		(pin "2"
-			(uuid "08d84e8e-59a3-4985-aa61-7396e2475eb4")
-		)
-		(instances
-			(project "ATX-PSU_8b"
-				(path "/37d25dd6-4ee6-4a11-9ae8-e7d7c76201f7"
-					(reference "C3")
 					(unit 1)
 				)
 			)
