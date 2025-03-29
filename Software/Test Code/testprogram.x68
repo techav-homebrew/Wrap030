@@ -27,8 +27,8 @@ chrLp\@
 	btst	#1,aciaCom	; check if ACIA Tx register is empty
 	;beq.s	chrLp\@	; loop until empty
 	bne.s	chrOut\@	; if empty, skip ahead and output byte
-	addq.l	#1,D1	; increment loop counter
-	cmp.l	#1000,D1	; limit 1000 loops
+	addq.b	#1,D1	; increment loop counter
+	cmp.b	#64,D1	; limit 1000 loops
 	bne.s	chrLp\@	; if not at limit, then continue loop
 chrOut\@
 	move.b	D0,aciaDat	; output character to ACIA
@@ -82,7 +82,7 @@ START:			; first instruction of program
 	prntStr
 
 ClearOverlay:
-	move.l	#0,overlayPort	; disable startup overlay
+	move.b	#0,overlayPort	; disable startup overlay
 	lea	strOverlay(PC),A1	; get confirmation string
 	prntStr
 

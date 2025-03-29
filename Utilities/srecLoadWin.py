@@ -114,6 +114,7 @@ for line in f.readlines():
     print(line,end='')
     ser.write(lin)
 	
+#ser.write('Run\r\n')
 
 f.close()
 ser.close()

@@ -31,6 +31,7 @@ endif
 
 ROM: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
+	$(OC) $(OCFLAGS) rom.out -O ihex rom.hex
 
 rom.out: exprom.o tsmon.o fpubasic.o
 	$(LD) $(LDFLAGS) -Map rom.map -o rom.out $^

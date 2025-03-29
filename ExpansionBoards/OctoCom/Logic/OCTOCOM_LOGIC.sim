@@ -1,0 +1,110 @@
+%SIGNAL
+PIN   1 =  CLK 
+PIN  20 =  CPUA23 
+PIN   5 =  CPUA31 
+PIN   6 =  CPUAMATCH0 
+PIN   7 =  CPUAMATCH1 
+PIN   8 =  CPUAMATCH2 
+PIN   2 =  CPUASn 
+PIN   4 =  CPUDSn 
+PIN   3 =  CPURWn 
+PIN  17 =  EQU0 
+PIN  18 =  EQU1 
+PIN  19 =  EQU2 
+PIN  21 =  IOCEn 
+PIN  23 =  IORDn 
+PIN   9 =  IOSEL0 
+PIN  10 =  IOSEL1 
+PIN  11 =  IOSEL2 
+PIN  22 =  IOWRn 
+PIN  14 =  Q0 
+PIN  15 =  Q1 
+PIN  16 =  Q2 
+%END
+
+%FIELD
+%END
+
+%EQUATION
+EQU0 =>
+    CPUAMATCH0 & IOSEL0
+  # !CPUAMATCH0 & !IOSEL0
+
+EQU1 =>
+    CPUAMATCH1 & IOSEL1
+  # !CPUAMATCH1 & !IOSEL1
+
+EQU2 =>
+    CPUAMATCH2 & IOSEL2
+  # !CPUAMATCH2 & !IOSEL2
+
+IOCEn =>
+    CPUASn
+  # CPUA23
+  # !CPUA31
+  # !EQU0
+  # !EQU1
+  # !EQU2
+
+IORDn =>
+    !CPURWn
+  # CPUDSn
+
+IOWRn =>
+    CPURWn
+  # CPUDSn
+
+Q0.d  =>
+    !IOCEn
+
+Q0.ar Q1.ar Q2.ar  =>
+    !CPUASn
+
+Q0.sp Q1.sp Q2.sp  =>
+    0 
+
+Q1.d  =>
+    !Q0
+
+Q1.ar  =>
+    
+Q1.sp  =>
+    
+Q2.d  =>
+    !Q1
+
+Q2.ar  =>
+    
+Q2.sp  =>
+    
+CPUA23.oe  =>
+    0 
+
+EQU0.oe  =>
+    1 
+
+EQU1.oe  =>
+    1 
+
+EQU2.oe  =>
+    1 
+
+IOCEn.oe  =>
+    1 
+
+IORDn.oe  =>
+    1 
+
+IOWRn.oe  =>
+    1 
+
+Q0.oe  =>
+    1 
+
+Q1.oe  =>
+    1 
+
+Q2.oe  =>
+    1 
+
+%END

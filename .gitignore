@@ -18,3 +18,12 @@ ExpansionBoards/wrap030isa
 Utilities/vasm
 Utilities/vlink
 *_Abandoned*
+*-backups*
+*fp-info-cache
+*autosave*
+*.bak
+*.bak*
+*fp-lib-table*
+*sym-lib-table*
+*.hex
+*.dump
