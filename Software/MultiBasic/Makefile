@@ -2,7 +2,7 @@ AS=m68k-elf-as
 ASFLAGS=-m68882 -march=68030 -mcpu=68030 --base-size-default-16 -alhms
 
 CC=m68k-elf-gcc
-CFLAGS=-std=c99 -O1 -save-temps \
+CFLAGS=-std=c99 -O1 \
 		-nostdlib -nodefaultlibs -fomit-frame-pointer \
 		-fno-builtin -m68030 -m68881 -nostartfiles -pie -c
 
@@ -11,6 +11,8 @@ LDFLAGS=--cref -T linker.ld
 
 OC=m68k-elf-objcopy
 OCFLAGS=
+
+OD=m68k-elf-objdump
 
 PYTHON=python.exe
 
@@ -29,41 +31,39 @@ RM = rm -rf
 CP = cp -f
 endif
 
-
-#TOPTARGETS := all clean
-
-#SUBDIRS := $(wildcard */.)
-
-#$(TOPTARGETS): $(SUBDIRS)
-#$(SUBDIRS):
-#	$(MAKE) -C $@ $(MAKECMDGOALS)
-
-#.PHONY: $(TOPTARGETS) $(SUBDIRS)
-
-SUBDIRS := $(wildcard */.)
+EXCLUDE := linker.ld/. Makefile/. rom.bin/. rom.hex/. rom.map/. rom.out/. rom.srec/.
+SUBDIRS := $(filter-out $(EXCLUDE),$(wildcard */.))
 
 SRCS = $(wildcard */*.asm)
 OBJS = $(patsubst %.asm,%.o,$(SRCS))
 
-$(info DEBUG $(OBJS))
+CSRCS = $(wildcard */*.c)
+COBJS = $(patsubst %.c,%.o,$(CSRCS))
+
+$(info DEBUG-OBJS $(OBJS))
+$(info DEBUG-SUBDIRS $(SUBDIRS))
 
 rom.srec: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
 	$(OC) $(OCFLAGS) rom.out -O ihex rom.hex
 	$(OC) $(OCFLAGS) rom.out -O binary rom.bin
 
-rom.out: $(OBJS)
+rom.out: $(OBJS) $(COBJS)
 	$(LD) $(LDFLAGS) -Map rom.map -o rom.out $^
 
 $(OBJS): $(SRCS)
 	$(info CALLING MAKE $(@F))
 	$(MAKE) -C $(@D) $(@F)
 
+$(COBJS): $(CSRCS)
+	$(info CALLING MAKE $(@F))
+	$(MAKE) -C $(@D) $(@F)
+	$(OD) -S --disassemble $(@D)/$(@F) > $(@D)/$(@F).dump
 
 clean: $(SUBDIRS)
 $(SUBDIRS):
-	$(MAKE) -C $@ $(MAKECMDGOALS)
 	-$(RM) *.o *.out *.L68 *.srec *.map *.i *.hex *.bin
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 .PHONY: clean $(SUBDIRS)
 
 burn: rom.srec
