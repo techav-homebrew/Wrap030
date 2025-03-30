@@ -49,6 +49,7 @@ kInit:
     lea     USERTABLE,%a0                   |; pointer to user table
 1:
     bsr     kUserTblInit                    |; initialize user
+    move.b  #uModeTerminal,%a1@(utblUsrMode)    |; initialize user mode to Terminal
     dbra    %d0,1b                          |; initialize all users
     debugPrintStrI "OK\r\n"
 
@@ -60,6 +61,7 @@ kInit:
     move.l  #BASICENTRY,%sp@-               |; push BASIC entry point to stack as return address
     move.w  #0,%sp@-                        |; push clear CCR to stack
     moveq.l #0,%d0                          |; start by loading user 0
+    move.l  %d0,USERNUM                     |; save initial user number
     move.l  %d0,%d1                         |; clear syscall to make it past context restore
     bra     RestoreUserContext              |; load user context & start execution
 
@@ -71,6 +73,9 @@ kUserTblInit:
     move.l  %d0,%d1                         |; copy user number
     mulu    #utbl_size,%d1                  |; multiply by table entry size to get offset
     lea     %a0@(%d1.l),%a1                 |; get pointer to this user's table entry
+
+    move.w  %a1@(utblUsrMode),%sp@-         |; save user mode, it's set elsewhere
+
     move.w  #15,%d2                         |; set loop counter for 16 registers
     eor.l   %d3,%d3                         |; clear D3 for initializing table entries
     lea     %a1@(utblRegD0),%a2             |; set up incrementable pointer for this
@@ -99,9 +104,10 @@ kUserTblInit:
     add.l   %d5,%d4                         |; calculate initial user stack pointer
     move.l  %d4,%a1@(utblRegA7)             |; 
 
-    ;lea     BASICENTRY,%a2                  |; set initial user PC to BASIC entry point in ROM
     lea     RAMBASIC,%a2                    |; get pointer to BASIC in RAM
     move.l  %a2,%a1@(utblRegPC)             |;
+
+    move.w  %sp@+,%a1@(utblUsrMode)         |; restore user mode
 
     rts
 
@@ -186,13 +192,28 @@ NextUser:
     |;debugPrintStrI  "\r\nU:"
     |;debugPrintHexByte %d0
     |;debugPrintHexNyb    %d0
-    move.l  USERNUM,%d0
+    |;move.l  USERNUM,%d0
 
-
+    |; check user mode
+    move.l  %d0,%d1
+    mulu    #utbl_size,%d1                  |; shift user number to table offset
+    lea     USERTABLE,%a0                   |; get uesr table pointer
+    add.l   %d1,%a0                         |; add user offset
+    cmpi    #uModeModem,%a0@(utblUsrMode)   |; check user mode
+    bne     RestoreUserContext              |; if not modem mode, go restore user
+    |; user is in modem mode; check modem status register
+    move.l  %a0@(utblConIn),%a1             |; get pointer to user console device
+    move.b  %a1@(comRegMSR),%d1             |; get modem status register
+    andi.b  #0x22,%d1                       |; mask off DSR bits
+    cmpi.b  #0x22,%d1                       |; check for start of new call
+    bne.s   RestoreUserContext              |; no new call, go restore user
+    bsr     kUserTblInit                    |; new call started, re-init user
+    |; on return, fall through to RestoreUserContext
     
 |; restore context for user in D0
 RestoreUserContext:
     |;debugPrintStrI  "R"
+    move.l  USERNUM,%d0
     mulu    #utbl_size,%d0                  |; shift user number to table offset
     lea     USERTABLE,%a0                   |; get user table pointer again
     add.l   %d0,%a0                         |; add user offset
