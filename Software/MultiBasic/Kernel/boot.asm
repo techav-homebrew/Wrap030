@@ -16,6 +16,7 @@
 
 |; cold boot entry
 COLDBOOT:
+    lea         SUPVSTACKINIT,%sp           |; set initial supervisor stack pointer
     lea         ramBot,%a0                  |; get pointer to address 0
     move.l      #0x55aa55aa,%d0             |; get a test pattern
     move.l      %d0,%a0@                    |; try to write the test pattern

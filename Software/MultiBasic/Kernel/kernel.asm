@@ -5,11 +5,12 @@
     .include    "kmacros.inc"
     .global     kUserTblInit
     .global     NextUser
-    .extern     _initKernelConsole
+    .extern     STACKINIT
 
     .section text,"ax"
 
 WARMBOOT:
+    lea     SUPVSTACKINIT,%sp               |; initialize stack pointer
     |; enable CPU cache
 kEnableCache:
 .ifndef     SIMULATE
@@ -18,52 +19,11 @@ kEnableCache:
 .endif
     debugPrintStrI "Cache enabled\r\n"
 
-/*
-    |; copy syscalls into RAM
-    |; we're just going to use the mmu table space for now
-kCopy:
-    debugPrintStrI "Loading kernel calls from ROM ... "
-    lea     kRAMstart,%a0                   |; get pointer to start of code
-    lea     kRAMend,%a1                     |; get pointer to end of code
-    lea     SysTrapRAM,%a2                  |; get pointer to target
-    |;movea.l %a2,%a3                         |; get a copy of the target address
-1:
-    move.l  %a0@+,%a2@+                     |; copy word
-    cmp.l   %a0,%a1                         |; check for end
-    ble.s   1b                              |; loop until complete
-
-    |; debug: check what we just copied
-    lea     SysTrapRAM,%a0
-    move.l  %a0,%d0
-    debugPrintHexLong %d0 
-    debugPrintStrI ":"
-    move.l  %a0@,%d0
-    debugPrintHexLong %d0 
-    debugPrintStrI " - "
-    lea     kRAMend,%a0
-    sub.l   #kRAMstart,%a0
-    add.l   #SysTrapRAM,%a0
-    subq.l  #4,%a0
-    move.l  %a0,%d0
-    debugPrintHexLong %d0 
-    debugPrintStrI ":"
-    move.l  %a0@,%d0
-    debugPrintHexLong %d0 
-    debugPrintStrI " v"
-    move.l  0x00000080,%d0
-    debugPrintHexLong %d0
-    debugPrintStrI " ... "
-
-    |;lea     %a3@(SysTrap),%a3               |; get relative pointer to sys trap
-    |;move.l  %a3,0x0080                      |; save new vector
-    debugPrintStrI "OK\r\n"
-*/
-
 kInitConsoles:
     |; initialize user console ports
     debugPrintStrI "Initializing user console ports ... "
 .ifndef     SIMULATE
-    lea     tblUserConIn,%a0                |; get pointer to user console pointer table
+    lea     %pc@(tblUserConIn),%a0          |; get pointer to user console pointer table
     move.l  #MAXUSERS-1,%d0                 |; get number of users
 1:
     |;move.l  %a0@(%d0.l:4),%a1               |; get pointer to console device
@@ -81,20 +41,6 @@ kInitConsoles:
     dbra    %d0,1b                          |; initialize all users' console ports
 .endif
     debugPrintStrI "OK\r\n"
-
-/*
-    |; load BASIC into RAM
-kBasicLoader:
-    debugPrintStrI "Loading BASIC from ROM ... "
-    lea     ROMBASIC,%a0                    |; get pointer to BASIC in ROM
-    lea     RAMBASIC,%a1                    |; get pointer to where BASIC will go in RAM
-    move.l  #SIZEBASIC,%d0                  |; get size of BASIC in bytes
-    lsr.l   #2,%d0                          |; convert to count of longwords
-1:
-    move.l  %a0@+,%a1@+                     |; copy BASIC into RAM one longword at a time
-    dbra    %d0,1b                          |; keep copying until finished
-    debugPrintStrI "OK\r\n"
-*/
 
     |; initialize user data table
 kInit:
@@ -120,47 +66,8 @@ kInit:
 
 
 
-|; initialize user table in A0 for user number in D0
+|; initialize user table in A0 for user number in D0.L
 kUserTblInit:
-/*
-    move.l  %d0,%d1                         |; copy user number
-    move.l  #utbl_size,%d2                  |; get size of user table entry
-    mulu    %d2,%d1                         |; get user entry offset
-    lea     %a0@(%d1.l),%a1                 |; get pointer to this user's table entry
-    eor.l   %d3,%d3                         |; clear D3 for initializing table entries
-    lsr.l   #2,%d2                          |; convert byte count to word count
-    move.l  %d2,%d4                         |; copy for later use
-1:
-    move.l  %d3,%a1@(%d2.l)                 |; clear entire user table entry
-    dbra    %d2,1b                          |; loop until entire entry cleared
-
-    lea     tblUserConIn,%a2                |; get pointer to user console in table
-    move.l  %a2@(%d4.l),%a1@(utblConIn)     |; get user's console in pointer
-
-    lea     tblUserConOut,%a2               |; get pointer to user console out table
-    move.l  %a2@(%d4.l),%a1@(utblConOut)    |; get user's console out pointer
-
-    lea     tblUserMem,%a2                  |; get pointer to user memory start table
-    move.l  %a2@(%d4.l),%d5                 |; get user's memory region start pointer
-    move.l  %d5,%a1@(utblMemPtr)            |; save to user table
-    move.l  %d5,%a1@(utblRegA0)             |; also copy to user A0 to initialize BASIC
-
-    lea     tblUserMemSize,%a2              |; get pointer to user memory size table
-    move.l  %a2@(%d4.l),%d6                 |; get user's memory size
-    move.l  %d6,%a1@(utblMemLen)            |; save to user table
-    move.l  %d6,%a1@(utblRegD0)             |; also copy to user D0 to initialize BASIC
-
-    add.l   %d5,%d6                         |; calculate initial user stack pointer
-    move.l  %d6,%a1@(utblRegA7)             |; save to user A7
-
-    lea     RAMBASIC,%a2                    |; get pointer to BASIC in RAM
-    move.l  %a2,%a1@(utblRegPC)             |; save to user initial PC
-
-    rts
-*/
-
-
-
     move.l  %d0,%d1                         |; copy user number
     mulu    #utbl_size,%d1                  |; multiply by table entry size to get offset
     lea     %a0@(%d1.l),%a1                 |; get pointer to this user's table entry
@@ -175,16 +82,16 @@ kUserTblInit:
     lsl.l   #2,%d2                          |; word size shift
 
     move.l  %d3,%a1@(utblRegCCR)            |; clear user CCR
-    lea     tblUserConIn,%a2                |; set user console in device address
+    lea     %pc@(tblUserConIn),%a2          |; set user console in device address
     move.l  %a2@(%d2.L),%a1@(utblConIn)     |;
     lea     tblUserConOut,%a2               |; set user console out device address
     move.l  %a2@(%d2.L),%a1@(utblConOut)    |;
 
-    lea     tblUserMem,%a2                  |; set user memory start address
+    lea     %pc@(tblUserMem),%a2            |; set user memory start address
     move.l  %a2@(%d2.L),%d4                 |;
     move.l  %d4,%a1@(utblMemPtr)            |;
     move.l  %d4,%a1@(utblRegA0)             |; 
-    lea     tblUserMemSize,%a2              |; set user memory size
+    lea     %pc@(tblUserMemSize),%a2        |; set user memory size
     move.l  %a2@(%d2.L),%d5                 |;
     move.l  %d5,%a1@(utblMemLen)            |;
     move.l  %d5,%a1@(utblRegD0)             |;
@@ -324,9 +231,6 @@ RestoreUserContext:
     |; if D1 was 0 we'll end up here. time to return from exception using the
     |; user PC we restored to exception frame
     rte
-
-
-
 
 
 doSysTrapConRead:

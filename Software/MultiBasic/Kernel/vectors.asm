@@ -12,10 +12,10 @@
     .extern NextUser
 
 vector:
-    dc.l    STACKINIT           |;  0   000
-    dc.l    COLDBOOT            |;  1   004
-    dc.l    exceptionType2      |;  2   008 bus error
-    dc.l    exceptionType2      |;  3   00c address error
+    dc.l    STACKINIT           |;  0   000 reset interrupt stack poitner
+    dc.l    COLDBOOT            |;  1   004 reset program counter
+    dc.l    exceptionTypeF      |;  2   008 bus error
+    dc.l    exceptionTypeF      |;  3   00c address error
     dc.l    exceptionType2      |;  4   010 illegal instruction
     dc.l    exceptionType2      |;  5   014 divide by zero
     dc.l    exceptionType1      |;  6   018 CHK/CHK2
@@ -38,7 +38,6 @@ vector:
     dc.l    exceptionType1      |; 30   078 autovector 6
     dc.l    exceptionType1      |; 31   07c autovector 7
     dc.l    SysTrap             |; 32   080 trap 0
-    |;dc.l    SysTrapRAM          |; 32   080 trap 0
     dc.l    exceptionType1      |; 33   084 trap 1
     dc.l    exceptionType1      |; 34   088 trap 2
     dc.l    exceptionType1      |; 35   08c trap 3
@@ -73,30 +72,62 @@ vector:
 |; type 1 exception will be exceptions we can recover from
 |; and return to the current user without issue
 exceptionType1:
-    movem.l %a0/%d0,%sp@-                   |; save registers
-    move.w  %sp@(14),%d0                    |; get vector offset
     bsr     printVector                     |; print vector name string
-    movem.l %sp@+,%a0/%d0                   |; restore registers
     rte                                     |; return to current user
+
+|; fatal exceptions (bus error / address error)
+|; we'll need to update the Special Status Word on the stack frame so that
+|; the CPU will not retry the instruction or bus cycle that caused the error
+exceptionTypeF:
+    andi.w  #0xCEFF,%sp@(0x0a)              |; clear retry bits
+    |; fall through to the Type2 exception handler
 
 |; type 2 exception will be exceptions we cannot recover from
 |; and the user will need to be reinitialized
 exceptionType2:
-    move.w  %sp@(14),%d0                    |; get vector offset
     bsr     printVector                     |; print vector name string
 
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get current user number
     jsr     kUserTblInit                    |; reinitialize current user
 
-    jmp     NextUser                        |; skip to the next user
+    lea     NextUser,%a0                    |; update return address to switch
+    move.l  %a0,%sp@(2)                     |;  to next user on rte
+    rte                                     |;
 
-|; print the exception name for vector offset in D0
+|; print exception name & data from exception stack frame
 printVector:
-    andi.w  #0x0fff,%d0                     |; mask vector number
-    lea     vectorNameTable,%a0             |; get pointer to string pointer table
+    move.w  %sr,wordSR
+    move.w  %sp@(0),frameStatus
+    move.l  %sp@(2),framePC
+    move.w  %sp@(6),frameVector
+    movem.l %d0/%a0,%sp@-                   |; save working registers
+    
+    |; print exception data
+    debugPrintStrI "\r\nException: "
+    move.w  wordSR,%d0
+    debugPrintHexWord
+    debugPrintStrI ","
+    move.w  frameStatus,%d0
+    debugPrintHexWord
+    debugPrintStrI ","
+    move.l  framePC,%d0
+    debugPrintHexLong
+    debugPrintStrI ","
+    move.l  frameVector,%d0
+    debugPrintHexWord
+    debugPrintStrI " - "
+
+    |; print vector name
+    move.w  frameVector,%d0
+    andi.w  #0x0fff,%d0                     |; mask vector offset
+    lea     %pc@(vectorNameTable),%a0       |; get pointer to string pointer table
     move.l  %a0@(%d0.w),%a0                 |; get string pointer
-    debugPrintStr                           |; kernel printstring macro
+    debugPrintStr                           |; print vector name
+
+    |; print new prompt
+    debugPrintStrI "\r\n> "
+    movem.l %sp@+,%d1/%a0                   |; restore working registers
     rts
 
 |; table of pointers to friendly name strings for all vectors
@@ -160,53 +191,58 @@ vectorNameTable:
 
 |; table of friendly name strings for all vectors
 vectorNames:
-strBusErr:      .ascii  "\r\nBus Error\r\n\0"
-strAddrErr:     .ascii  "\r\nAddress Error\r\n\0"
-strIllIns:      .ascii  "\r\nIllegal Instruction\r\n\0"
-strDivZero:     .ascii  "\r\nDiv by Zero\r\n\0"
-strChk:         .ascii  "\r\nCHK Trap\r\n\0"
-strTrapV:       .ascii  "\r\nTRAPV\r\n\0"
-strPrivViol:    .ascii  "\r\nPrivilege Violation\r\n\0"
-strTrace:       .ascii  "\r\nTrace IRQ\r\n\0"
-strALine:       .ascii  "\r\nA-Trap\r\n\0"
-strFLine:       .ascii  "\r\nF-Trap\r\n\0"
-strUnused:      .ascii  "\r\nUnused Vector\r\n\0"
-strCoproViol:   .ascii  "\r\nCoprocessor Err\r\n\0"
-strFormatErr:   .ascii  "\r\nFormat Err\r\n\0"
-strUninitIrq:   .ascii  "\r\nUninitialized IRQ\r\n\0"
-strSpurIrq:     .ascii  "\r\nSpurious IRQ\r\n\0"
-strIrq1:        .ascii  "\r\nIRQ 1\r\n\0"
-strIrq2:        .ascii  "\r\nIRQ 2\r\n\0"
-strIrq3:        .ascii  "\r\nIRQ 3\r\n\0"
-strIrq4:        .ascii  "\r\nIRQ 4\r\n\0"
-strIrq5:        .ascii  "\r\nIRQ 5\r\n\0"
-strIrq6:        .ascii  "\r\nIRQ 6\r\n\0"
-strIrq7:        .ascii  "\r\nIRQ 7\r\n\0"
-strTrap0:       .ascii  "\r\nTrap #0\r\n\0"
-strTrap1:       .ascii  "\r\nTrap #1\r\n\0"
-strTrap2:       .ascii  "\r\nTrap #2\r\n\0"
-strTrap3:       .ascii  "\r\nTrap #3\r\n\0"
-strTrap4:       .ascii  "\r\nTrap #4\r\n\0"
-strTrap5:       .ascii  "\r\nTrap #5\r\n\0"
-strTrap6:       .ascii  "\r\nTrap #6\r\n\0"
-strTrap7:       .ascii  "\r\nTrap #7\r\n\0"
-strTrap8:       .ascii  "\r\nTrap #8\r\n\0"
-strTrap9:       .ascii  "\r\nTrap #9\r\n\0"
-strTrapA:       .ascii  "\r\nTrap #10\r\n\0"
-strTrapB:       .ascii  "\r\nTrap #11\r\n\0"
-strTrapC:       .ascii  "\r\nTrap #12\r\n\0"
-strTrapD:       .ascii  "\r\nTrap #13\r\n\0"
-strTrapE:       .ascii  "\r\nTrap #14\r\n\0"
-strTrapF:       .ascii  "\r\nTrap #15\r\n\0"
-strFpuBSUC:     .ascii  "\r\nFPU Error\r\n\0"
-strFpuInexact:  .ascii  "\r\nFPU Inexact\r\n\0"
-strFpuDivZero:  .ascii  "\r\nFPU Div by Zero\r\n\0"
-strFpuUnderflow: .ascii "\r\nFPU Underflow\r\n\0"
-strFpuOperand:  .ascii  "\r\nFPU Operand Err\r\n\0"
-strFpuOverflow: .ascii  "\r\nFPU Overflow\r\n\0"
-strFpuNaN:      .ascii  "\r\nFPU NaN Err\r\n\0"
-strMmuConfigErr: .ascii "\r\nMMU Config Err\r\n\0"
-strMmuUnused:   .ascii  "\r\nMMU Err\r\n\0"
+strBusErr:      .ascii  "Bus Error\0"
+strAddrErr:     .ascii  "Address Error\0"
+strIllIns:      .ascii  "Illegal Instruction\0"
+strDivZero:     .ascii  "Div by Zero\0"
+strChk:         .ascii  "CHK Trap\0"
+strTrapV:       .ascii  "TRAPV\0"
+strPrivViol:    .ascii  "Privilege Violation\0"
+strTrace:       .ascii  "Trace IRQ\0"
+strALine:       .ascii  "A-Trap\0"
+strFLine:       .ascii  "F-Trap\0"
+strUnused:      .ascii  "Unused Vector\0"
+strCoproViol:   .ascii  "Coprocessor Err\0"
+strFormatErr:   .ascii  "Format Err\0"
+strUninitIrq:   .ascii  "Uninitialized IRQ\0"
+strSpurIrq:     .ascii  "Spurious IRQ\0"
+strIrq1:        .ascii  "IRQ 1\0"
+strIrq2:        .ascii  "IRQ 2\0"
+strIrq3:        .ascii  "IRQ 3\0"
+strIrq4:        .ascii  "IRQ 4\0"
+strIrq5:        .ascii  "IRQ 5\0"
+strIrq6:        .ascii  "IRQ 6\0"
+strIrq7:        .ascii  "IRQ 7\0"
+strTrap0:       .ascii  "Trap #0\0"
+strTrap1:       .ascii  "Trap #1\0"
+strTrap2:       .ascii  "Trap #2\0"
+strTrap3:       .ascii  "Trap #3\0"
+strTrap4:       .ascii  "Trap #4\0"
+strTrap5:       .ascii  "Trap #5\0"
+strTrap6:       .ascii  "Trap #6\0"
+strTrap7:       .ascii  "Trap #7\0"
+strTrap8:       .ascii  "Trap #8\0"
+strTrap9:       .ascii  "Trap #9\0"
+strTrapA:       .ascii  "Trap #10\0"
+strTrapB:       .ascii  "Trap #11\0"
+strTrapC:       .ascii  "Trap #12\0"
+strTrapD:       .ascii  "Trap #13\0"
+strTrapE:       .ascii  "Trap #14\0"
+strTrapF:       .ascii  "Trap #15\0"
+strFpuBSUC:     .ascii  "FPU Error\0"
+strFpuInexact:  .ascii  "FPU Inexact\0"
+strFpuDivZero:  .ascii  "FPU Div by Zero\0"
+strFpuUnderflow: .ascii "FPU Underflow\0"
+strFpuOperand:  .ascii  "FPU Operand Err\0"
+strFpuOverflow: .ascii  "FPU Overflow\0"
+strFpuNaN:      .ascii  "FPU NaN Err\0"
+strMmuConfigErr: .ascii "MMU Config Err\0"
+strMmuUnused:   .ascii  "MMU Err\0"
     .even
 
 
+    .section    bss,"w"
+wordSR:        ds.w    1
+frameStatus:    ds.w    1
+framePC:        ds.l    1
+frameVector:    ds.w    1

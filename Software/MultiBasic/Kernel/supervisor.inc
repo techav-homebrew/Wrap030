@@ -23,6 +23,16 @@ supvConsole:
     beq     _supvExit                       |; if no byte, then exit
     move.b  acia1Dat,%d0                    |; read byte
 
+    cmp.b   #0x20,%d0                       |; check for control char
+    blt.s   1f                              |; branch for control char
+    debugPrintChar %d0                      |; print received char
+    bra.s   2f
+1:
+    debugPrintStrI "^"
+    move.b  %d0,%d1                         |; copy command byte
+    addi.b  #0x40,%d1                       |; shift up to printable
+    debugPrintChar %d1                      |; print received char
+2:
     |; parse
     btst    #7,%d0                          |; ignore any above 127
     bne     _supvExit
@@ -42,124 +52,120 @@ supvConsole:
 _supvExit:
     rts
 
+
 _supvCold:
     debugPrintStrI " => COLD REBOOT NOW\r\n"
-    jmp     _initKernelConsole
+    |; make sure we're jumping into ROM not RAM
+    lea     romOffset,%a0
+    lea     %a0@(COLDBOOT),%a0
+    jmp     %a0@
+
 
 _supvWarm:
     debugPrintStrI " => WARM REBOOT NOW\r\n"
     lea     %sp@(4),%sp                     |; pop return address off stack
-    jmp     kInit
+    jmp     WARMBOOT
+
 
 _supvResetUser:
     debugPrintStrI " => Resetting user "
     and.b   #0x07,%d0                       |; mask off user number
+    extb.l  %d0                             |; sign-extend user number to long
     debugPrintHexByte %d0
     lea     USERTABLE,%a0                   |; get pointer to user table
     bsr     kUserTblInit                    |; reset user table entry
     debugPrintStrI "\r\n> "
     rts
 
+
 _supvSetStopBits:
-    move.b  %d0,%d1                         |; copy byte
-    and.b   #0x07,%d1                       |; mask off user number
-    eor.l   %d2,%d2                         |; clear a register
-    add.b   %d1,%d2                         |; long user number
-    lsl.l   #2,%d2                          |; shift to longword offset
-    lea     tblUserConIn,%a0                |; get pointer to console table
-    add.l   %d2,%a0                         |; get pointer to user IO pointer
-    move.l  %a0@,%a0                        |; get user IO pointer
-    move.b  %a0@(comRegLCR),%d3             |; get current LCR register value
-
-    and.b   #0xfb,%d3                       |; mask relevant bits
-
-    btst    #3,%d0                          |; check stop bit setting
-    beq.s   1f                              |; branch for 0
-    debugPrintStrI " => Setting 2 stop bits for user "
-    or.b    0x04,%d3                        |; set bit for 2 stop 
+    move.b  %d0,%d1                         |; copy command byte
     
+    and.b   #0x07,%d1                       |; mask off user number
+    extb.l  %d1                             |; sign-extend to longword
+
+    lea     %pc@(tblUserConIn),%a0          |; get pointer to console table
+    move.l  %a0@(%d1.l*4),%a0               |; get pointer to user console
+
+    btst    #3,%d0                          |; check requested setting
+    beq.s   1f                              |; branch if clear
+    ori.b   #0x04,%a0@(comRegLCR)           |; set bit
+    debugPrintStrI " => Setting 2 stop bits for user "
     bra.s   2f
 1:
+    andi.b  #0xfb,%a0@(comRegLCR)           |; clear bit
     debugPrintStrI " => Setting 1 stop bit for user "
-2: 
-    move.b  %d3,%a0@(comRegLCR)             |; write back new value to register
+2:
     debugPrintHexByte %d1
     debugPrintStrI "\r\n> "
     rts
 
+
 _supvSetFormat:
-    move.b  %d0,%d1                         |; copy command
+    move.b  %d0,%d1                         |; copy command byte
+
     and.b   #0x07,%d1                       |; mask user number
     extb.l  %d1                             |; sign-extend to longword
 
-    move.b  %d0,%d2                         |; copy command
-    lsr.b   #3,%d2                          |; shift format into position
-    and.b   #0x03,%d2                       |; mask format bits
-    extb.l  %d2                             |; sign-extend to longword
+    lsr.b   #3,%d0                          |; shift format into position
+    and.b   #0x03,%d0                       |; mask format bits
+    extb.l  %d0                             |; sign-extend to longword
 
-    lea     tblSupvFormat,%a1               |; format data table pointer
-    add.l   %d2,%a1                         |; pointer to table entry
-    move.b  %a1@,%d3                        |; get table entry
+    lea     %pc@(tblSupvFormat),%a1         |; get format table pointer
+    move.b  %a1@(%d0.l),%d2                 |; get format byte
 
-    lea     tblUserConIn,%a1                |; get user console table
-    move.l  %d1,%d4                         |; copy user number
-    lsl.l   #2,%d4                          |; shift to longword offset
-    add.l   %d4,%a1                         |; pointer to table entry
-    move.l  %a1@,%a1                        |; pointer to user console
+    lea     %pc@(tblUserConIn),%a0          |; get pointer to console table
+    move.l  %a0@(%d1.l*4),%a0               |; get pointer to user console
 
-    move.b  %a1@(comRegLCR),%d5             |; get current setting
-    and.b   #0xE4,%d5                       |; mask out format bits
-    or.b    %d3,%d5                         |; apply new settings
-    move.b  %d5,%a1@(comRegLCR)             |; save new settings
+    move.b  %a0@(comRegLCR),%d3             |; get current LCR byte
+    andi.b  #0xc4,%d3                       |; mask off settings bits
+    or.b    %d2,%d3                         |; apply new settings
+    move.b  %d3,%a0@(comRegLCR)             |; apply new settings
 
-    lea     tblSupvFormatStr,%a1            |; get pointer to string pointer table
-    add.l   %d4,%a1                         |; get pointer to entry
-    move.l  %a1@,%a0                        |; get pointer from table
-    debugPrintStr                           |; print string from table
-    debugPrintHexByte %d1                   |; print user number
+    lea     tblSupvFormatStr,%a0            |; get pointer to string table
+    move.l  %a0@(%d0.L*4),%a0               |; get pointer to string
+
+    debugPrintStr
+    debugPrintHexByte %d1
     debugPrintStrI "\r\n> "
     rts
 
+
 _supvSetBaud:
-    move.b  %d0,%d1                         |; copy command
+    move.b  %d0,%d1                         |; copy command byte
+
     and.b   #0x07,%d1                       |; mask user number
     extb.l  %d1                             |; sign-extend to longword
 
-    move.b  %d0,%d2                         |; copy command
-    lsr.b   #3,%d2                          |; shift baudrate into position
-    and.b   #0x07,%d2                       |; mask baudrate bits
-    extb.l  %d2                             |; sign-extend to longword
+    lsr.b   #3,%d0                          |; shift baudrate into position
+    andi.b  #0x07,%d0                       |; mask baudrate bits
+    extb.l  %d0                             |; sign-extend to longword
 
-    lea     tblSupvBaudDivisor,%a1          |; baudrate divisor table pointer
-    add.l   %d2,%a1                         |; pointer to table entry
-    move.w  %a1@,%d3                        |; get table entry (divisor)
+    lea     %pc@(tblSupvBaudDivisor),%a1    |; get baudrate table pointer
+    move.w  %a1@(%d0.l*2),%d2               |; get baudrate divisor
 
-    lea     tblUserConIn,%a1                |; get user console table
-    move.l  %d1,%d4                         |; copy user number
-    lsl.l   #2,%d4                          |; shift to longword offset
-    add.l   %d4,%a1                         |; pointer to table entry
-    move.l  %a1@,%a1                        |; pointer to user console
+    lea     %pc@(tblUserConIn),%a0          |; get pointer to console table
+    move.l  %a0@(%d1.l*4),%a0               |; get pointer to user console
 
-    ori.b   #0x80,%a1@(comRegLCR)           |; enable divisor registers
-    move.b  %d3,%a1@(comRegDivLo)           |; set divisor low byte
-    lsl.w   #8,%d3                          |; get divisor high byte
-    move.b  %d3,%a1@(comRegDivHi)           |; set divisor high byte
-    andi.b  #0x7f,%a1@(comRegLCR)           |; disable divisor registers
+    ori.b   #0x80,%a0@(comRegLCR)           |; enable divisor registers
+    move.b  %d2,%a0@(comRegDivLo)           |; set divisor low byte
+    lsr.l   #8,%d2                          |; get divisor high byte
+    move.b  %d2,%a0@(comRegDivHi)           |; set divisor high byte
+    andi.b  #0x7f,%a0@(comRegLCR)           |; disable divisor registers
 
-    lea     tblSupvBaudStr,%a1              |; get pointer to string pointer table
-    add.l   %d4,%a1                         |; get pointer to entry
-    move.l  %a1@,%a0                        |; get pointer from table
-    debugPrintStr                           |; print string from table
-    debugPrintHexByte %d1                   |; print user number
+    lea     %pc@(tblSupvBaudStr),%a1        |; get pointer to string table
+    move.l  %a1@(%d0.l*4),%a0               |; get pointer to string
+    debugPrintStr
+    debugPrintHexByte %d1
     debugPrintStrI "\r\n> "
     rts
 
 
 tblSupvFormat:
-    dc.b    0x03
-    dc.b    0x02
-    dc.b    0x18
-    dc.b    0x12
+    dc.b    0x03                            |; 8bit No parity
+    dc.b    0x02                            |; 7bit No parity
+    dc.b    0x1a                            |; 7bit Even parity
+    dc.b    0x0a                            |; 7bit Odd parity
 
 tblSupvFormatStr:
     dc.l    strSupvFormat0                  |; 8bit No parity
@@ -202,4 +208,3 @@ strSupvBaud6:   .ascii  " => Setting 38400 baud for user \0"
 strSupvBaud7:   .ascii  " => Setting 115200 baud for user \0"
 
     .even
-
