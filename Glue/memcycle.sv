@@ -52,14 +52,9 @@ parameter
     sAWAT3  =    7, // Async wait 3 state
     sAWAT4  =    8, // Async wait 4 state
     sATERM  =    9, // Async term state
-    sVACTV  =   10, // Video active state
-    sVWAT1  =   11, // Video wait 1 state
-    sVWAT2  =   12, // Video wait 2 state
-    sVWAT3  =   13, // Video wait 3 state
-    sVTERM  =   14, // Video term state
-    sBERR   =   15, // Bus error state
-    sMODE   =   16, // Mode switch state
-    sEND    =   17; // Cycle end state
+    sBERR   =   10, // Bus error state
+    sMODE   =   11, // Mode switch state
+    sEND    =   12; // Cycle end state
 logic [4:0] timingState;
 
 reg nRamCEinternal,
@@ -75,7 +70,6 @@ reg nRamCEinternal,
 wire    ramSel,
         romSel,
         berrSel,
-        vidSel,
         modeSel;
 
 assign nRomCE = nRomCEinternal;
@@ -153,23 +147,6 @@ always_comb begin
     end
 end
 
-// CPU is driving an address that maps to a 16-bit video port
-/*always_comb begin
-    if(!nAS && !addr31 && addrSel == 5) begin
-        vidSel <= 1;
-    end else begin
-        vidSel <= 0;
-    end
-end*/
-// CPU is driving an address that maps to the video port (RAM page 3)
-always_comb begin
-    if(!nAS && !addr31 && addrSel == 3) begin
-        vidSel <= 1;
-    end else begin
-        vidSel <= 0;
-    end
-end
-
 // CPU is driving an address that doesn't map to anything
 always_comb begin
     if(!nAS && !addr31) begin
@@ -221,7 +198,6 @@ always @(posedge sysClk or posedge nAS or negedge nReset) begin
                 else if(romSel) timingState <= sAACTV;
                 else if(berrSel) timingState <= sBERR;
                 else if(modeSel) timingState <= sMODE;
-                else if(vidSel) timingState <= sVACTV;
                 else timingState <= sIDLE;
                 nRamCEinternal <= 1;
                 nRomCEinternal <= 1;
@@ -347,72 +323,6 @@ always @(posedge sysClk or posedge nAS or negedge nReset) begin
                 nDSACKinternal <= 0;
                 nDSACK16internal <= 1;
                 nSTERMinternal <= 1;
-                nBERRinternal <= 1;
-            end
-            sVACTV: begin
-                // Video Active state
-                // Always move to sVWAT1
-                timingState <= sVWAT1;
-                nRamCEinternal <= 0;
-                nRomCEinternal <= 1;
-                nMemRDinternal <= ~RnW;
-                nMemWRinternal <= RnW;
-                nDSACKinternal <= 1;
-                nDSACK16internal <= 1;
-                nSTERMinternal <= 1;
-                nBERRinternal <= 1;
-            end
-            sVWAT1: begin
-                // Video Wait 1 state
-                // Always move to sVWAT2
-                timingState <= sVWAT2;
-                nRamCEinternal <= 0;
-                nRomCEinternal <= 1;
-                nMemRDinternal <= nMemRDinternal;
-                nMemWRinternal <= nMemWRinternal;
-                nDSACKinternal <= 1;
-                nDSACK16internal <= 1;
-                nSTERMinternal <= 1;
-                nBERRinternal <= 1;
-            end
-            sVWAT2: begin
-                // Video Wait 2 state
-                // Always move to sVWAT3
-                timingState <= sVWAT3;
-                nRamCEinternal <= 0;
-                nRomCEinternal <= 1;
-                nMemRDinternal <= nMemRDinternal;
-                nMemWRinternal <= nMemWRinternal;
-                nDSACKinternal <= 1;
-                nDSACK16internal <= 1;
-                nSTERMinternal <= 1;
-                nBERRinternal <= 1;
-            end
-            sVWAT3: begin
-                // Video Wait 3 state
-                // Always move to sVTERM
-                timingState <= sVTERM;
-                nRamCEinternal <= 0;
-                nRomCEinternal <= 1;
-                nMemRDinternal <= nMemRDinternal;
-                nMemWRinternal <= nMemWRinternal;
-                nDSACKinternal <= 1;
-                nDSACK16internal <= 1;
-                nSTERMinternal <= 1;
-                nBERRinternal <= 1;
-            end
-            sVTERM: begin
-                // Video Term state
-                // Always move to sEND
-                timingState <= sEND;
-                timingState <= sEND;
-                nRamCEinternal <= 0;
-                nRomCEinternal <= 1;
-                nMemRDinternal <= nMemRDinternal;
-                nMemWRinternal <= nMemWRinternal;
-                nDSACKinternal <= 1;
-                nDSACK16internal <= 1;
-                nSTERMinternal <= 0;
                 nBERRinternal <= 1;
             end
             sBERR : begin
