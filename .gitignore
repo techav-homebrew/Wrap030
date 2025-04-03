@@ -27,3 +27,10 @@ Utilities/vlink
 *sym-lib-table*
 *.hex
 *.dump
+*.lck
+
+# winCUPL output files
+*.jed
+*.abs
+*.sim
+*.pdf
