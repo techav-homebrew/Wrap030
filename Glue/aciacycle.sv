@@ -11,6 +11,7 @@ module aciacycle (
     input   wire                nReset,      // primary system reset
     input   wire                nAS,        // address strobe
     input   wire                addr31,     // address bit 31
+    input   wire  [1:0]         cpuFC,      // cpu function code low bits
     input   logic [2:0]         addrSel,    // address select bits (21:19)
     output  logic [1:0]         nDsack,     // DS acknowledge
     output  wire                aciaClk,    // ACIA ~1MHz Clock
@@ -57,7 +58,9 @@ always @(posedge sysClk or posedge nAS) begin
             S0 : begin
                 // Idle state
                 // wait for CPU to assert AS & addrSel=1
-                if(!nAS && !addr31 && addrSel == 7) timingState <= S2;
+                if(!nAS && addr31 
+                        && (cpuFC[1] ^ cpuFC[0]) 
+                        && addrSel == 1) timingState <= S2;
                 else timingState <= S0;
                 nDsackInternal <= 1;
                 nAciaCeInternal <= 1;

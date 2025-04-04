@@ -1,5 +1,5 @@
 ramBot     = 0x00000000;
-ramTop     = 0x001fffff;
+ramTop     = 0x00ffffff;
 stackTop   = ramTop + 1;
 
 /*
@@ -10,7 +10,7 @@ romSector1 = 0x00210000;
 MEMORY
 {
     rom (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00080000
-    ram (rwx) : ORIGIN = 0x00080000, LENGTH = 0x00180000
+    ram (rwx) : ORIGIN = 0x00080000, LENGTH = 0x01180000
 }
 
 /*
@@ -21,18 +21,18 @@ MEMORY
 }
 */
 
-acia1Com = 0x00380000;
+acia1Com = 0x80080000;
 acia1Dat = acia1Com + 4;
 acia2Com = acia1Com + 8;
 acia2Dat = acia2Com + 4;
 
-overlayPort = 0x00300000;
+overlayPort = 0x80180000;
 /*
 romBot              = 0x00200000;
 romTop              = 0x0021FFFF;
 */
 
-romOffset           = 0x00200000;   /* position of ROM when overlay disabled */
+romOffset           = 0x80000000;   /* position of ROM when overlay disabled */
 romBot              = 0x00000000;
 romTop              = 0x0007FFFF;
 romSector0          = romBot;
@@ -68,24 +68,15 @@ comRegSPR   = (7); /* Scratch Pad Register */
 comRegDivLo = (0); /* Divisor Latch Register LSB (Requires LCR DLAB set) */
 comRegDivHi = (1); /* Divisor Latch Register MSB (Requires LCR DLAB set) */
 
-io8base     = 0x80000000;
-io8card0    = io8base;
-io8card1    = io8base + 0x002000;
-io8card2    = io8base + 0x004000;
-io8card3    = io8base + 0x006000;
-io8card4    = io8base + 0x008000;
-io8card5    = io8base + 0x00a000;
-io8card6    = io8base + 0x00c000;
-io8card7    = io8base + 0x00e000;
-
-ioCom0      = io8card0 + 0x0000 + 0x00;
-ioCom1      = io8card0 + 0x0000 + 0x08;
-ioCom2      = io8card0 + 0x0000 + 0x10;
-ioCom3      = io8card0 + 0x0000 + 0x18;
-ioCom4      = io8card0 + 0x0000 + 0x20;
-ioCom5      = io8card0 + 0x0000 + 0x28;
-ioCom6      = io8card0 + 0x0000 + 0x30;
-ioCom7      = io8card0 + 0x0000 + 0x38;
+ioComBase   = 0x80300000;
+ioCom0      = ioComBase + 0x0000 + 0x00;
+ioCom1      = ioComBase + 0x0000 + 0x08;
+ioCom2      = ioComBase + 0x0000 + 0x10;
+ioCom3      = ioComBase + 0x0000 + 0x18;
+ioCom4      = ioComBase + 0x0000 + 0x20;
+ioCom5      = ioComBase + 0x0000 + 0x28;
+ioCom6      = ioComBase + 0x0000 + 0x30;
+ioCom7      = ioComBase + 0x0000 + 0x38;
 
 uMemSize    = 128 * 1024;
 uMemSize0   = uMemSize;
