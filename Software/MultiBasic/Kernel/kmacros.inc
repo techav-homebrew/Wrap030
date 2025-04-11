@@ -19,21 +19,26 @@ L\@lp:
     .endm
 
 |; macro for printing an immediate string to the kernel console
-
-.ifdef  SIMULATE
-    .macro  debugPrintStrI  str
-    movem.l %a1/%d0,%sp@-                   |; save working registers
-    move.w  #14,%d0                         |; simulator trap 14 (printstring)
-    lea     %pc@(L\@Str),%a1                |; get pointer to string
-    trap    #15                             |; simulator system call
-    bra     L\@mexit                        |; skip to end of macro
+|; that doesn't bother with saving working registers
+    .macro  debugPrintStrInoram str
+    lea     %pc@(L\@Str),%a0                |; get pointer to string
+L\@nxtChr:
+    move.b  %a0@+,%d0                       |; get next byte in string
+    beq     L\@mexit                        |; if byte is 0, then end print
+L\@lp:
+    btst    #1,acia1Com                     |; check ACIA txrdy bit
+    beq.s   L\@lp                           |; loop until ready 
+    move.b  %d0,acia1Dat                    |; send byte
+    bra     L\@nxtChr                       |; loop until null
 L\@Str:
-    .ascii  "\str\0"                        |; immediate string to print
-    .even                                   |; word-align
+    .ascii  "\str\0"
+    .even 
 L\@mexit:
-    movem.l %sp@+,%a1/%d0                   |; restore working registers
+    nop
     .endm
-.else
+
+|; macro for printing an immediate string to the kernel console
+
     .macro  debugPrintStrI  str
     movem.l %a0/%d0,%sp@-                   |; save working registers
     lea     %pc@(L\@Str),%a0                |; get pointer to string
@@ -51,7 +56,7 @@ L\@Str:
 L\@mexit:
     movem.l %sp@+,%a0/%d0                    |; restore working registers
     .endm
-.endif
+
 
 |; macro for pointing a string in A0 to the kernel console
     .macro debugPrintStr
@@ -107,3 +112,32 @@ L\@prt:
     debugPrintHexWord \regInL              |; print it
     .endm
 
+
+
+
+
+|; print a single byte in D0 without touching RAM. Clobbers D1
+    .macro debugPrintHexByteNoRam
+    move.w  %d0,%d1                         |; save register
+    ror.b   #4,%d0                          |; move high nybble into position
+    debugPrintHexNyb %d0                    |; print high nybble
+    move.w  %d1,%d0                         |; restore register
+    debugPrintHexNyb %d0                    |; print low nybble
+    move.w  %d1,%d0                         |; restore register
+    .endm
+
+|; print a single word in D0 without touching RAM. Clobbers D1
+    .macro  debugPrintHexWordNoRam
+    ror.w   #8,%d0                          |; rotate high byte into position
+    debugPrintHexByteNoRam                  |; print it
+    ror.w   #8,%d0                          |; rotate low byte back into position
+    debugPrintHexByteNoRam                  |; print it
+    .endm
+
+|; print a longword in D0 without touching RAM. Clobbers D1
+    .macro  debugPrintHexLongNoRam
+    swap    %d0                             |; rotate high word into position
+    debugPrintHexWordNoRam                  |; print it
+    swap    %d0                             |; rotate low word back into position
+    debugPrintHexWordNoRam                  |; print it
+    .endm

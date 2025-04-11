@@ -90,10 +90,14 @@ uMemSize7   = uMemSize;
 
 ENTRY(COLDBOOT)
 SECTIONS{
-    .kernel 0x00000000 :
+    .vectors 0x00000000 :
     {
         Kernel/vectors.o (text)
         . = ALIGN(4);
+    } > rom = 0xff
+    .kernel 0x00001000 :
+    {
+        RESETENTRY = .;
         Kernel/boot.o (text)
         . = ALIGN(4);
         Kernel/kernel.o (text)
@@ -146,3 +150,4 @@ SECTIONS{
 
 SIZEBASIC = .basicEnd - .basicStart ;
 SUPVSTACKINIT = STACKINIT - 1024 ;
+RESETVECTOR = RESETENTRY + romOffset ;

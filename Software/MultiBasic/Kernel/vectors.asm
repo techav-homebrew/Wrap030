@@ -3,7 +3,7 @@
     .section    text,"ax"
     .include    "kmacros.inc"
     .extern STACKINIT
-    .extern COLDBOOT
+    .extern RESETVECTOR
     |;.extern SysTrap
     .extern SysTrapRAM
     .extern USERTABLE
@@ -12,8 +12,8 @@
     .extern NextUser
 
 vector:
-    dc.l    STACKINIT           |;  0   000 reset interrupt stack poitner
-    dc.l    COLDBOOT            |;  1   004 reset program counter
+    dc.l    STACKINIT           |;  0   000 reset interrupt stack pointer
+    dc.l    RESETVECTOR         |;  1   004 reset vector
     dc.l    exceptionTypeF      |;  2   008 bus error
     dc.l    exceptionTypeF      |;  3   00c address error
     dc.l    exceptionType2      |;  4   010 illegal instruction
