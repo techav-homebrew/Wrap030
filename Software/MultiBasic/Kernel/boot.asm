@@ -11,6 +11,7 @@
     .extern overlayPort
     .extern ramTop
     .extern romOffset
+    .extern VECTORTABLE
 
     .equ        aciaSet, 0x15               |; 8N1,÷16 (38400),no interrupts
 
@@ -35,10 +36,17 @@ _initKernelConsole:
     debugPrintStrInoram  "Starting vector 0x"
     move.l      %a3,%d0
     debugPrintHexLongNoRam
+    debugPrintStrInoram "\r\n"
 
+    debugPrintStrInoram "Setting vector base register to 0x"
+    lea         VECTORTABLE,%a5
+    move.l      %a5,%d0
+    debugPrintHexLongNoRam
+    movec       %a5,%vbr
+    debugPrintStrInoram " ... OK\r\n"
 
 _clearOverlay:
-    debugPrintStrInoram "\r\nDisabling overlay ... "
+    debugPrintStrInoram "Disabling overlay ... "
     move.b      #0,overlayPort              |; disable startup overlay
     debugPrintStrInoram "OK\r\n"
 

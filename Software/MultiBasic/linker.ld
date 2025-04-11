@@ -92,6 +92,7 @@ ENTRY(COLDBOOT)
 SECTIONS{
     .vectors 0x00000000 :
     {
+        VECTORS = .;
         Kernel/vectors.o (text)
         . = ALIGN(4);
     } > rom = 0xff
@@ -150,4 +151,5 @@ SECTIONS{
 
 SIZEBASIC = .basicEnd - .basicStart ;
 SUPVSTACKINIT = STACKINIT - 1024 ;
+VECTORTABLE = VECTORS + romOffset ;
 RESETVECTOR = RESETENTRY + romOffset ;
