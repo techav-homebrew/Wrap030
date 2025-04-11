@@ -92,7 +92,7 @@ always_comb begin
 end
 
 // CPU is driving an address for toggling memory overlay
-//      address: $0018,0000
+//      address: $8018,0000
 always_comb begin
     if(!nAS && addr31 && addrSel == 3 && !RnW && (cpuFC[0] ^ cpuFC[1])) begin
         // writes to page 6 toggle the reset overlay
@@ -224,7 +224,7 @@ always @(posedge sysClk or posedge nAS or negedge nReset) begin
                 nRomCEinternal <= 1;
                 nMemRDinternal <= 1;
                 nMemWRinternal <= 1;
-                nDSACKinternal <= 1;
+                nDSACKinternal <= 0;
                 nBERRinternal <= 1;
                 memOverlay <= ~memOverlay;
                 nAVECinternal <= 1;

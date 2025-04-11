@@ -52,10 +52,9 @@ always_comb begin
     if(!nIntBerr) znBerr <= 0;
     else znBerr <= 1'bZ;
 
-    if(!nMemSterm) znSTERM <= 0;
-    else znSTERM <= 1'bZ;
+    znSTERM <= 1'bZ;
 
-    if(!nAciaAciaCE) znCiin <= 0;
+    if(!nAS && (cpuFC[0] ^ cpuFC[1]) && addr31) znCiin <= 0;
     else znCiin <= 1'bZ;
 
     if(!nIntAvec) znAvec <= 0;
