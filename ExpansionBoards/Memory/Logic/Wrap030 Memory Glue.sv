@@ -39,7 +39,7 @@ module wrap030_dram_glue (
 );
 
 
-assign stateDebug = timingState;
+//assign stateDebug = timingState;
 /*always @(negedge busClk, negedge busReset_n) begin
     if(!busReset_n) stateDebug <= sIDL;
     else stateDebug <= nextState;
@@ -92,18 +92,19 @@ end
 
 
 // refresh timing counter
-reg [8:0] refreshTimer;
+reg [6:0] refreshTimer;
 reg refreshCall, refreshAck;
 reg [3:0] initRfshCount;
 always @(posedge busClk, negedge busReset_n) begin
     if(!busReset_n) begin
         refreshTimer <= 0;
         refreshCall <= 0;
-    end else if(refreshTimer >= 9'h186) begin   // 390 cycles @ 25MHz = 15.6us
+//    end else if(refreshTimer >= 9'h186) begin   // 390 cycles @ 25MHz = 15.6us
+    end else if(refreshTimer >= 7'h7E) begin    // 126 cycles @ 25MHz = 5.04 us
         refreshCall <= 1;
         refreshTimer <= 0;
     end else if(initRfshCount >= 4'h8) begin
-        refreshTimer <= refreshTimer + 9'h001;
+        refreshTimer <= refreshTimer + 7'h001;
         if(refreshAck) refreshCall <= 0;
         else refreshCall <= refreshCall;
     end
@@ -137,6 +138,28 @@ always @(negedge busClk, negedge busReset_n) begin
 end
 
 
+
+always @(negedge busClk, negedge busReset_n) begin
+    if(!busReset_n) begin
+        stateDebug <= 4'h0;
+    end else begin
+        case(nextState)
+            sIDL: stateDebug <= 4'h0;
+            sCR0: stateDebug <= 4'h1;
+            sCC0: stateDebug <= 4'h2;
+            sCC1: stateDebug <= 4'h3;
+            sBST: stateDebug <= 4'h4;
+            sBND: stateDebug <= 4'h5;
+            sRC0: stateDebug <= 4'h6;
+            sRR0: stateDebug <= 4'h7;
+            sRR1: stateDebug <= 4'h8;
+            sRR2: stateDebug <= 4'h9;
+            sINIT: stateDebug <= 4'hA;
+            sREG: stateDebug <= 4'hB;
+            default: stateDebug <= 4'hF;
+        endcase
+    end
+end
 
 // primary DRAM controller state machine
 parameter
@@ -221,7 +244,11 @@ always @(*) begin
             */
 
             // we don't have burst request here, so just go to idle
-            nextState = sIDL;
+            //nextState = sIDL;
+            
+            // hold in this state until CPU deasserts AS
+            if(busAS_n) nextState = sIDL;
+            else nextState = sCC1;
         end
         sBST: begin
             // Cycle burst state
