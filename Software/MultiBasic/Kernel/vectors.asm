@@ -98,9 +98,9 @@ exceptionType2:
 |; print exception name & data from exception stack frame
 printVector:
     move.w  %sr,wordSR
-    move.w  %sp@(0),frameStatus
-    move.l  %sp@(2),framePC
-    move.w  %sp@(6),frameVector
+    move.w  %sp@(4),frameStatus
+    move.l  %sp@(6),framePC
+    move.w  %sp@(10),frameVector
     movem.l %d0/%a0,%sp@-                   |; save working registers
     
     |; print exception data
