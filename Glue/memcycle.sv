@@ -54,9 +54,9 @@ reg nRomCEinternal,
     nAVECinternal,
     memOverlay;     // 0 on reset; 1 enables read RAM page 0
 
-wire    romSel,
-        berrSel,
-        modeSel;
+wire    romSel;
+wire    berrSel;
+wire    modeSel;
 
 assign nRomCE = nRomCEinternal;
 assign nMemRd = nMemRDinternal;
@@ -103,6 +103,7 @@ always_comb begin
 end
 
 // CPU is driving an address that doesn't map to anything
+/*
 always_comb begin
     if(nAS) begin
         // no cycle, don't do BERR
@@ -120,7 +121,7 @@ always_comb begin
         berrSel = 1;
     end
 end
-
+*/
 
 // Primary timing state machine
 always @(posedge sysClk or posedge nAS or negedge nReset) begin
@@ -141,7 +142,7 @@ always @(posedge sysClk or posedge nAS or negedge nReset) begin
                 // Wait for memory cycle to begin
                 if(cpuFC == 3 && addrSel == 7) timingState <= sAVEC;
                 else if(romSel) timingState <= sAACTV;
-                else if(berrSel) timingState <= sBERR;
+                //else if(berrSel) timingState <= sBERR;
                 else if(modeSel) timingState <= sMODE;
                 else timingState <= sIDLE;
                 nRomCEinternal <= 1;
