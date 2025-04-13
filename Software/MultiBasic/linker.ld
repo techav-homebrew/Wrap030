@@ -34,7 +34,7 @@ romTop              = 0x0021FFFF;
 
 romOffset           = 0x80000000;   /* position of ROM when overlay disabled */
 romBot              = 0x00000000;
-romTop              = 0x0007FFFF;
+romTop              = 0x0001FFFF;
 romSector0          = romBot;
 romSector1          = romBot + 0x00010000;
 

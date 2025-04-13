@@ -12,6 +12,8 @@
     .extern ramTop
     .extern romOffset
     .extern VECTORTABLE
+    .extern romOffset
+    .extern romTop
 
     .equ        aciaSet, 0x15               |; 8N1,÷16 (38400),no interrupts
 
@@ -51,7 +53,7 @@ _clearOverlay:
     debugPrintStrInoram "OK\r\n"
 
 _memTest1:
-    debugPrintStrInoram "Writing pattern 0x55aa55aa to start of RAM"
+    debugPrintStrInoram "Writing pattern 0x55AA55AA to start of RAM"
     move.l      #0x55aa55aa,%d3             |; get pattern
     move.l      %d3,ramBot                  |; write to bottom of RAM
     debugPrintStrInoram " ... "
@@ -67,7 +69,7 @@ _memTest1:
     debugPrintStrInoram ". PASS\r\n"
 
 _memTest2:
-    debugPrintStrInoram "Writing sequential bytes 0x55aa1188"
+    debugPrintStrInoram "Writing sequential bytes 0x55AA1188"
     lea         ramBot,%a0                  |; get memory pointer
     move.l      %a0,%a1
     move.l      #0x55aa1188,%d7             |; get test pattern
@@ -115,6 +117,79 @@ _clearMainMem:
     bne         1b                          |; loop until we are
     debugPrintStrInoram  "OK\r\n"
 
+|; copy ROM into RAM
+_shadowROM:
+    debugPrintStrInoram "Loading from 0x"
+    lea         romBot,%a2                  |; get pointer to start of ROM
+    lea         %a2@(romOffset),%a2
+    move.l      %a2,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram " to 0x"
+    lea         ramBot,%a3                  |; get pointer to start of RAM
+    move.l      %a3,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram " ... "
+
+    lea         romBot,%a2                  |; get pointer to start of ROM
+    lea         %a2@(romOffset),%a2
+    lea         ramBot,%a3                  |; get pointer to start of RAM
+
+    move.l      #romTop,%d0                 |; get size of ROM in bytes
+    lsr.l       #2,%d0                      |; shift to size in longwords
+1:
+    move.l      %a2@+,%a3@+                 |; copy a longword
+    subq.l      #1,%d0                      |; decrement longword counter
+    bne         1b                          |; loop until copy complete
+    debugPrintStrInoram "OK\r\n"
+
+_verifyShadow:
+    debugPrintStrInoram "Verifying ... "
+    lea         romBot,%a2                  |; get pointer to start of ROM
+    lea         %a2@(romOffset),%a2         |;
+    lea         ramBot,%a3                  |; get pointer to start of RAM
+    move.l      #romTop,%d0                 |; get size of ROM in bytes
+    lsr.l       #2,%d0                      |; shift to size in longwords
+1:
+    move.l      %a2@+,%d2                   |; read longword from ROM
+    move.l      %a3@+,%d3                   |; read longword from RAM
+    cmp.l       %d2,%d3                     |; make sure they match
+    bne         2f                          |; branch on error
+    subq.l      #1,%d0                      |; decrement counter
+    bne         1b                          |; loop until verify complete
+    bra         _verifyDone                 |; if we made it here we're good
+2:  |; handle verify error
+    debugPrintStrInoram "ERROR at 0x"
+    move.l      %a3,%d0                     |; get RAM pointer
+    subq.l      #4,%d0                      |; decrement to failed address
+    debugPrintHexLongNoRam                  |; print failed address
+    debugPrintStrInoram ":\r\n    Expected: 0x"
+    move.l      %d2,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram "; Read: 0x"
+    move.l      %d3,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram ". Resetting....."
+    jmp         COLDBOOT
+
+_verifyDone:
+    debugPrintStrInoram "OK\r\nStarting Kernel ... \r\n"
+    jmp         WARMBOOT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 |; copy contents of ROM into RAM above highest ROM address
 _shadowROMp1:
     debugPrintStrInoram "Loading ... "
@@ -230,7 +305,7 @@ _shadowROMp5:
     debugPrintStrInoram "\r\n\r\n"
     jmp COLDBOOT
 
-
+*/
 
 
 /*
