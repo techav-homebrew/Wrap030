@@ -33,22 +33,73 @@ COLDBOOT:
     lea     %pc@(strOk),%a0                 |;
     ldrPrintStr                             |;
 
+
+.testRamData:
+    lea     %pc@(strTestRamData),%a0        |;
+    ldrPrintStr                             |;
+    lea     ramBot,%a0                      |; get pointer to RAM
+    moveq   #1,%d0                          |; initialize pattern
+1:  move.l  %d0,%a0@                        |; write pattern
+    move.l  %a0@,%d1                        |; read back pattern
+    cmp.l   %d0,%d1                         |; check pattern
+    bne.s   2f                              |; memory error
+    lsl.l   #1,%d0                          |; shift pattern
+    bne.s   1b                              |;      until pattern is 0
+    |; test complete passed
+    lea     %pc@(strOk),%a0                 |;
+    ldrPrintStr                             |;
+    bra     .testRamAddr                    |; go to next test
+2:  |; error
+    move.l  %d0,%d6                         |; save test registers
+    move.l  %d1,%d7                         |;
+    lea     %pc@(strError),%a0              |; print error
+    ldrPrintStr                             |;
+    lea     %pc@(strExpected),%a0           |; print expected
+    ldrPrintStr                             |;
+    move.l  %d6,%d0                         |; get pattern
+    ldrPrintHexLong                         |; print pattern
+    lea     %pc@(strRead),%a0               |; print read
+    move.l  %d7,%d0                         |; get read value
+    ldrPrintHexLong                         |; print read value
+    lea     %pc@(strCRLF),%a0               |; print CRLF
+    ldrPrintStr                             |;
+    bra     rebootWait                      |; go reboot
+
+
+
+
+.testRamAddr:
+/*    lea     %pc@(strTestRamAddr),%a0        |;
+    ldrPrintStr                             |;
+   */ 
+
+
+
+
+
+
 .loadBoot:
     lea     %pc@(strLoading),%a0            |;
     ldrPrintStr                             |;
     bsr     LoadBootBin                     |; load BOOT.BIN into RAM at 0
     tst.b   %d0                             |; check return value
-    bne     .loadErr                        |; err if return not 0
+    bne     loadErr                         |; err if return not 0
     lea     %pc@(strOk),%a0                 |;
     ldrPrintStr                             |;
     jmp     0                               |; jump into boot at 0
     bra     .loadBoot                       |; reload if program returns
 
-.loadErr:
+loadErr:
     lea     %pc@(strError),%a0              |; 
     ldrPrintStr                             |; 
-    bra     COLDBOOT                        |; 
+    bra     rebootWait                      |; 
 
+
+rebootWait:
+    move.l  #0x00010000,%d0                 |; initialize counter
+1:  subq.l  #1,%d0                          |; decrement counter
+    bne.s   1b                              |; loop until count expired
+    bra     COLDBOOT                        |; reboot.
 
 
 
@@ -77,5 +128,19 @@ strClearOverlay:
 strLoading:
     .ascii  "Loading ... \0"
 
+strTestRamData:
+    .ascii  "Testing RAM data bus ... \0"
+
+strTestRamAddr:
+    .ascii  "Testing RAM address bus ... \0"
+
+strExpected:
+    .ascii  "Expected: 0x\0"
+
+strRead:
+    .ascii  " Read: 0x\0"
+
+strCRLF:
+    .ascii  "\r\n\0"
 
     .even

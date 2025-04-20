@@ -69,7 +69,17 @@ SECTIONS{
         wboot/boot.o (text)
         libc/*.o (text)
         libff/*.o (text)
+        wdisk/*.o (text)
     } > rom = 0xff
+    .bss (ramTop + 1 - 2048) :
+    {
+        /* put bss at top of RAM so it doesn't interfere with loading the
+         * boot file to the bottom of RAM */
+        wboot/*.o (bss)
+        libc/*.o (bss)
+        libff/*.o (bss)
+        wdisk/*.o (bss)
+    }
 }
 
 /*

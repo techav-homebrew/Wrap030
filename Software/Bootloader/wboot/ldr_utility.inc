@@ -38,54 +38,85 @@ L\@mexit:
     .endm
 
 
-|;*****************************************************************************
-|; POST-RAM UTILITY FUNCTIONS
-|;*****************************************************************************
 
-|; Put Char to Console (blocking)
-|; void putc(char)
-|;  PARAMETERS:
-|;      char        c       - character to put to console
-putc:
-1:  btst    #1,acia1Com                     |; check ACIA TxRdy bit
-    beq.s   1b                              |; wait until ready
-    move.b  %sp@(4),acia1Dat                |; put char to ACIA
-    rts
 
-|; Put Null-Terminated String to Console (blocking)
-|; void puts(char*)
-|;  PARAMETERS:
-|;      char*       str     - pointer to string to put to console
-puts:
-    move.l  %sp@(4),%a0                     |; get string pointer
-1:  move.b  %a0@+,%d0                       |; get byte from string
-    beq.s   3f                              |; done if null
-2:  btst    #1,acia1Com                     |; check ACIA TxRdy bit
-    beq.s   2b                              |; wait until ready
-    move.b  %d0,acia1Dat                    |; put char to ACIA
-    bra.s   1b                              |; loop until null
-3:  rts
+|; macro to print a hex nybble in D0
+|; clobbers D0.b
+    .macro  ldrPrintHexNyb
+    andi.b  #0x0f,%d0                       |; mask low nybble
+    cmpi.b  #0x0a,%d0                       |; check if [0-9] or [a-f]
+    blt.s   L\@num                          |; branch if numerical
+    addi.b  #0x37,%d0                       |; make result ascii letter
+    bra     L\@prt                          |; go print
+L\@num:
+    addi.b  #0x30,%d0                       |; make result ascii number
+L\@prt:
+    btst    #1,acia1Com                     |; check ACIA TxRdy bit
+    beq.s   L\@prt                          |; wait until ready
+    move.b  %d0,acia1Dat                    |; print byte
+    .endm
 
-|; Memory Compare
-|; bool memCmp(void*, void*, uint16_t)
-|;  PARAMETERS:
-|;      void*       ptr1    - pointer to region 1
-|;      void*       ptr2    - pointer to region 2
-|;      uint16_t    count   - number of bytes to compare
-|;  RETURNS:
-|;      %d0.l       [0: match | else: no match]
-memCmp:
-    move.l  %sp@(12),%d0                    |; get byte count
-    tst.l   %d0                             |; check if null
-    beq.s   2f                              |; return if count null
-    move.l  %sp@(4),%a0                     |; get pointer 1
-    move.l  %sp@(8),%a1                     |; get pointer 2
-    subq.l  #1,%d0                          |; pre-decrement count
-1:  |; memCmpLp
-    move.b  %a0@+,%d1                       |; get ptr1 byte
-    cmp.b   %a1@+,%d1                       |; compare with ptr2 byte
-    bne.s   2f                              |; end if no match
-    subq.l  #1,%d0                          |; decrement counter
-    bne.s   1b                              |; loop until done
-2:  |; memCmpDone
-    rts
+
+|; function to print a hex byte in D0
+|; clobbers D1.b
+ldrPrintHexByteF:
+    move.b  %d0,%d1                         |; save byte
+    lsr.b   #4,%d0                          |; get high nybble
+    ldrPrintHexNyb                          |; print high nybble
+    move.b  %d1,%d0                         |; restore byte
+    ldrPrintHexNyb                          |; print low nybble
+    move.b  %d1,%d0                         |; restore byte
+    jmp     %a6@                            |; return
+
+
+|; function to print a hex word in D0
+|; clobbers D1.w
+ldrPrintHexWordF:
+    ror.w   #8,%d0                          |; swap bytes in word
+    move.w  %d0,%d1                         |; save swapped word
+    ror.b   #4,%d0                          |; get high nyb of high byte
+    ldrPrintHexNyb                          |; print it
+    move.b  %d1,%d0                         |; restore high byte
+    ldrPrintHexNyb                          |; print next nybble
+    ror.w   #8,%d1                          |; unswap original word
+    move.b  %d1,%d0                         |; get low byte
+    ror.w   #4,%d0                          |; get high nyb of low byte
+    ldrPrintHexNyb                          |; print it
+    move.b  %d1,%d0                         |; restore low byte
+    ldrPrintHexNyb                          |; print last nybble
+    move.w  %d1,%d0                         |; restore original word
+    jmp     %a6@                            |; return
+
+|; function to print a hex longword in D0
+|; clobbers D1.l, A0,l
+ldrPrintHexLongF:
+    move.l  %d0,%d1                         |; save original longword
+    swap    %d0                             |; word swap D0
+    move.l  %a6,%a0                         |; save return address
+    lea     %pc@(1f),%a6                    |; get return address
+    bra     ldrPrintHexWordF                |; print high word
+1:  swap    %d0                             |; get low word
+    lea     %pc@(2f),%a6                    |; get return address
+    bra     ldrPrintHexWordF                |; print low word
+2:  move.w  %d0,%d1                         |; restore low word
+    move.l  %d1,%d0                         |; get original word
+    move.l  %a0,%a6                         |; restore return address
+    jmp     %a6@                            |; return
+
+
+
+|; macro wrappers
+    .macro  ldrPrintHexWord
+    lea     %pc@(L\@mexit),%a6              |; get return address
+    bra     ldrPrintHexWordF                |; go to subroutine
+L\@mexit:
+    nop
+    .endm
+
+    .macro  ldrPrintHexLong
+    lea     %pc@(L\@mexit),%a6              |; get return address
+    bra     ldrPrintHexLongF                |; go to subroutine
+L\@mexit:
+    nop
+    .endm
+
