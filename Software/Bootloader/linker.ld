@@ -9,10 +9,15 @@ romBot      = 0x00000000;
 romTop      = 0x0001ffff;
 romOffset   = 0x80000000;
 
-MEMORY
+/*MEMORY
 {
     rom (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00080000
     ram (rwx) : ORIGIN = 0x00080000, LENGTH = 0x01180000
+}*/
+MEMORY
+{
+    ram (rwx) : ORIGIN = 0x00000000, LENGTH = 0x01000000
+    rom (rx)  : ORIGIN = 0x80000000, LENGTH = 0x00040000
 }
 
 /* startup overlay port */
@@ -55,13 +60,13 @@ comRegDivHi = (1); /* Divisor Latch Register MSB (Requires LCR DLAB set) */
 
 ENTRY(COLDBOOT)
 SECTIONS{
-    .vectors 0x00000000 :
+    .vectors 0x80000000 :
     {
         VECTORS = .;
         wboot/vectors.o (text)
-        . = ALIGN(4);
-    } > rom = 0xff
-    .bootloader 0x00001000 :
+        . = ALIGN(4096);
+    } > rom AT> ram = 0xff
+    .bootloader :
     {
         RESETENTRY = .;
         wboot/bootloader.o (text)
@@ -70,7 +75,7 @@ SECTIONS{
         libc/*.o (text)
         libff/*.o (text)
         wdisk/*.o (text)
-    } > rom = 0xff
+    } > rom AT> ram = 0xff
     .bss (ramTop + 1 - 2048) :
     {
         /* put bss at top of RAM so it doesn't interfere with loading the
@@ -100,5 +105,10 @@ STACKINIT = romTop + 1 + 0x00020000 ;
 IRQSTACKINIT = ramTop + 1;
 SUPVSTACKINIT = ramTop + 1 - 1024;
 
+/*
 VECTORTABLE = VECTORS + romOffset ;
 RESETVECTOR = RESETENTRY + romOffset ;
+*/
+
+VECTORTABLE = VECTORS;
+RESETVECTOR = RESETENTRY;
