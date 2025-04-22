@@ -33,7 +33,7 @@ endif
 
 EXCLUDE := linker.ld/. Makefile/. rom.bin/. rom.hex/. rom.map/. rom.out/. rom.srec/.
 # SUBDIRS := $(filter-out $(EXCLUDE),$(wildcard */.))
-SUBDIRS := libc libff wboot
+SUBDIRS := libc libff wboot wdisk
 
 SRCS = $(wildcard */*.asm)
 OBJS = $(patsubst %.asm,%.o,$(SRCS))
@@ -59,7 +59,7 @@ $(OBJS): $(SRCS)
 $(COBJS): $(CSRCS)
 	$(info CALLING MAKE $(@F))
 	$(MAKE) -C $(@D) $(@F)
-#	$(OD) -S --disassemble $(@D)/$(@F) > $(@D)/$(@F).dump
+	$(OD) -S --disassemble $(@D)/$(@F) > $(@D)/$(@F).dump
 
 clean: $(SUBDIRS)
 $(SUBDIRS):

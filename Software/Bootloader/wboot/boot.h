@@ -1,6 +1,7 @@
 
 
 #include "../libff/ff.h"
+#include "acia.h"
 
 #ifndef wrap030boot_h
 #define wrap030boot_h

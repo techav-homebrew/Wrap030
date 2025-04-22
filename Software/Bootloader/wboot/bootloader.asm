@@ -4,10 +4,14 @@
     .global COLDBOOT
     .extern LoadBootBin
     .extern VECTORTABLE
-
-    .include "ldr_utility.inc"
+    .extern printStr
 
     .equ        aciaSet, 0x15               |; 8N1,÷16 (38400),no interrupts
+
+
+    bra     COLDBOOT
+
+    .include "ldr_utility.inc"    
 
 COLDBOOT:
     lea     SUPVSTACKINIT,%sp               |; set initial supervisor stack pointer
@@ -76,6 +80,32 @@ COLDBOOT:
 
 
 
+.initStack:
+    lea     %pc@(strSetStack),%a0           |;
+    ldrPrintStr                             |;
+    lea     IRQSTACKINIT,%a0                |; get interrupt stack pointer
+    movec.l %a0,%isp                        |;
+    lea     SUPVSTACKINIT,%a0               |; get supervisor stack pointer
+    movec.l %a0,%msp                        |; 
+    lea     %pc@(strOk),%a0                 |;
+    ldrPrintStr
+
+
+.testStack:
+    lea     %pc@(strTestSub),%a0            |; 
+    ldrPrintStr                             |; 
+    bsr     testSubroutine                  |; test subroutine branch
+    lea     %pc@(strOk),%a0                 |;
+    ldrPrintStr                             |;
+
+
+.testC:
+    lea     %pc@(strTestC),%a0              |;
+    ldrPrintStr
+    pea     %pc@(strOk)                     |; push OK string to stack
+    bsr     printStr                        |; call C print function
+    add.l   #4,%sp                          |; pop parameter off stack
+
 
 
 .loadBoot:
@@ -100,6 +130,12 @@ rebootWait:
 1:  subq.l  #1,%d0                          |; decrement counter
     bne.s   1b                              |; loop until count expired
     bra     COLDBOOT                        |; reboot.
+
+
+testSubroutine:
+    lea     %pc@(strTestDots),%a0           |;
+    ldrPrintStr
+    rts
 
 
 
@@ -133,6 +169,18 @@ strTestRamData:
 
 strTestRamAddr:
     .ascii  "Testing RAM address bus ... \0"
+
+strSetStack:
+    .ascii  "Configuring stack ... \0"
+
+strTestC:
+    .ascii  "Testing C interface ... \0"
+
+strTestSub:
+    .ascii  "Testing stack return ... \0"
+
+strTestDots:
+    .ascii  " ... \0"
 
 strExpected:
     .ascii  "Expected: 0x\0"

@@ -1,43 +1,38 @@
 |;*****************************************************************************
-|; PRE-RAM UTILITY FUNCTIONS
+|; PRE-RAM UTILITY FUNCTIONS & MACROS
 |;*****************************************************************************
 
-
-|; these functions are designed to operate without relying on RAM
-|; calling convention:
-|;      calling function pushes return address to A6
-|;      parameters passed & returned in D0
-
-|; print a null-terminated string pointed to by A0
-ldrPrintStrF:
-    move.b  %a0@,%d0                        |; get byte from string
-    beq.s   2f                              |; branch if null
-1:  btst    #1,acia1Com                     |; check ACIA TxRdy bit
-    beq.s   1b                              |; branch until ready
-    move.b  %d0,acia1Dat                    |; print byte
-    bra     ldrPrintStrF                    |; continue print loop until null
-2:  jmp     %a6@                            |; return
-
-|; macro wrapper for print string in A0
+|; macro to print string in A0
+|; clobbers D0.b
     .macro  ldrPrintStr
-    lea     %pc@(L\@mexit),%a6              |; grab return address
-    bra     ldrPrintStrF                    |; run print string routine
+L\@mloop:
+    move.b  %a0@+,%d0                       |; get byte from string
+    beq.s   L\@mexit                        |; exit if null
+L\@mwait:
+    btst    #1,acia1Com                     |; check ACIA TxRdy bit
+    beq.s   L\@mwait                        |; wait until ready
+    move.b  %d0,acia1Dat                    |; print byte
+    bra.s   L\@mloop                        |; loop until done
 L\@mexit:
-    nop
     .endm
 
-|; macro wrapper for print immediate string
+
+|; macro to print immediate debug string
+|; clobbers A0.l, D0.b
     .macro  ldrPrintStrI str
-    lea     %pc@(L\@mexit),%a6              |; grab return address
     lea     %pc@(L\@mstr),%a0               |; grab string pointer
-    bra     ldrPrintStrF                    |; print string
+L\@mloop:
+    move.b  %a0@+,%d0                       |; get byte from string
+    beq.s   L\@mexit                        |; exit if null
+L\@mwait:
+    btst    #1,acia1Com                     |; check ACIA TxRdy bit
+    beq.s   L\@mwait                        |; wait until ready
+    move.b  %d0,acia1Dat                    |; print byte
+    bra.s   L\@mloop                        |; loop until done
 L\@mstr:    .ascii "\str\0"                 |; immediate string
     .even
 L\@mexit:
-    nop
     .endm
-
-
 
 
 |; macro to print a hex nybble in D0
