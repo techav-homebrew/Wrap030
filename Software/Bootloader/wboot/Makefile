@@ -42,4 +42,4 @@ ALL: $(OBJS)
 	$(AS) $(ASFLAGS)="$*.L68" -o $@ $<
 
 clean:
-	-$(RM) *.o *.out *.L68 *.srec *.map *.i
+	-$(RM) *.o *.out *.L68 *.srec *.map *.i *.dump
