@@ -11,8 +11,8 @@
 #define statPE   (1 << 6)
 #define statIRQ  (1 << 7)
 
-extern unsigned char volatile *const acia1Com;
-extern unsigned char volatile *const acia1Dat;
+extern unsigned char volatile acia1Com;
+extern unsigned char volatile acia1Dat;
 
 void printStr(char *);
 

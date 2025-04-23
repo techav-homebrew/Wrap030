@@ -10,7 +10,7 @@ DSTATUS wrap030_disk_status(BYTE pdrive)
 {
     BYTE status;
     if(pdrive > 0) return STA_NOINIT;
-    status = *ideStatusRO;
+    status = ideStatusRO;
     if(status == 0) return STA_NODISK;
     else return 0;
 }
@@ -32,23 +32,23 @@ DSTATUS wrap030_disk_read(BYTE pdrive, BYTE *buff, LBA_t sector, UINT count)
     lba = ((uint32_t)sector & 0x0fffffff) | 0xe0000000;
 
     // send LBA to drive
-    *ideLBALLRW = (BYTE)(lba & 0xff);
-    *ideLBALHRW = (BYTE)((lba >> 8) & 0xff);
-    *ideLBAHLRW = (BYTE)((lba >> 16) & 0xff);
-    *ideLBAHHRW = (BYTE)((lba >> 24) & 0xff);
+    ideLBALLRW = (BYTE)(lba & 0xff);
+    ideLBALHRW = (BYTE)((lba >> 8) & 0xff);
+    ideLBAHLRW = (BYTE)((lba >> 16) & 0xff);
+    ideLBAHHRW = (BYTE)((lba >> 24) & 0xff);
 
     // send sector count to drive
-    *ideSectorCountRW = count;
+    ideSectorCountRW = count;
 
     // send read sectors command to drive
-    *ideCommandWO = 0x20;
+    ideCommandWO = 0x20;
 
     while(--count)
     {
         if(wrap030_wait_for_disk_read_ready() != 1) return RES_ERROR;
         for(int i=255; i>0; i--)
         {
-            WORD dat = *ideDataRW;
+            WORD dat = ideDataRW;
             *buff++ = (BYTE)(dat & 0x00ff);
             *buff++ = (BYTE)((dat >> 8) & 0x00ff);
         }
@@ -93,7 +93,7 @@ DRESULT wrap030_disk_ioctl(BYTE pdrive, BYTE cmd, void *buff)
 // returns <0 on error
 BYTE wrap030_disk_read_ready()
 {
-    BYTE status = *ideStatusRO;
+    BYTE status = ideStatusRO;
     if(status & IDE_STATUS_BSY) return 0;
     else if(!(status & IDE_STATUS_DRDY)) return 0;
     else if(!(status & IDE_STATUS_DRQ)) return 0;

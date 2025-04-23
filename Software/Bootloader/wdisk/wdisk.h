@@ -16,19 +16,19 @@
 #define IDE_STATUS_IDX (1 << 1)
 #define IDE_STATUS_ERR (1 << 0)
 
-extern WORD volatile * const ideDataRW;
-extern BYTE const volatile * const ideErrorRO;
-extern BYTE volatile *const ideFeatureWO;
-extern BYTE volatile *const ideSectorCountRW;
-extern BYTE volatile *const ideLBALLRW;
-extern BYTE volatile *const ideLBALHRW;
-extern BYTE volatile *const ideLBAHLRW;
-extern BYTE volatile *const ideLBAHHRW;
-extern BYTE const volatile * const ideStatusRO;
-extern BYTE volatile *const ideCommandWO;
-extern BYTE const volatile * const ideAltStatusRO;
-extern BYTE volatile *const ideDevControlWO;
-extern BYTE const volatile * const ideDevAddressRO;
+extern WORD volatile ideDataRW;
+extern BYTE const volatile ideErrorRO;
+extern BYTE volatile ideFeatureWO;
+extern BYTE volatile ideSectorCountRW;
+extern BYTE volatile ideLBALLRW;
+extern BYTE volatile ideLBALHRW;
+extern BYTE volatile ideLBAHLRW;
+extern BYTE volatile ideLBAHHRW;
+extern BYTE const volatile ideStatusRO;
+extern BYTE volatile ideCommandWO;
+extern BYTE const volatile ideAltStatusRO;
+extern BYTE volatile ideDevControlWO;
+extern BYTE const volatile ideDevAddressRO;
 
 DSTATUS wrap030_disk_status(BYTE);
 DSTATUS wrap030_disk_initialize(BYTE);
