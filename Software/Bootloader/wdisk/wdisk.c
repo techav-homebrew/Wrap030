@@ -112,9 +112,12 @@ int wrap030_disk_read(BYTE pdrive, BYTE *buff, LBA_t sector, UINT count)
             *buff++ = (BYTE)((dat >> 8) & 0x00ff);
             *buff++ = (BYTE)(dat & 0x00ff);
         }
+        #ifdef DEBUG
+        printStr("\r\n");
+        #endif
     }
     #ifdef DEBUG
-    printStrLn("\r\n*WRAP030_DISK_READ* read complete.");
+    printStrLn("*WRAP030_DISK_READ* read complete.");
     #endif
     return WDISK_OK;
 }
