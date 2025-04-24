@@ -14,6 +14,12 @@
 extern unsigned char volatile acia1Com;
 extern unsigned char volatile acia1Dat;
 
+void printChr(char);
 void printStr(char *);
+void printStrLn(char *);
+
+void printHexByte(unsigned char);
+void printHexWord(unsigned short);
+void printHexLong(unsigned int);
 
 #endif

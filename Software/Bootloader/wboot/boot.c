@@ -8,25 +8,38 @@ unsigned char LoadBootBin()
     FRESULT fileResult;
     unsigned int bytesRead;
     BYTE* fileBuffer = 0;
+    printStrLn("");
+    #ifdef DEBUG
+    printStrLn("\t*LOADBOOTBIN* Debug enabled ... ");
+    #endif
+
+    // initialize external data
+    printStrLn("\tInitializing filesystem driver ... ");
+    f_initialize();
 
     // mount file system
-    printStr("\r\n\tMounting ... ");
+    printStrLn("\tMounting ... ");
     f_mount(&fs,"",0);
 
     // open file BOOT.BIN
-    printStr("\r\b\tOpening BOOT.BIN ... ");
+    printStrLn("\tOpening BOOT.BIN ... ");
     fileResult = f_open(&bootFile,"BOOT.BIN",FA_READ);
+    #ifdef DEBUG
+    printStr("Result: 0x");
+    printHexByte((BYTE)fileResult);
+    printStr(" ... ");
+    #endif
     if(fileResult) return (unsigned char)fileResult;
 
     // read all of BOOT.BIN file
-    printStr("\r\n\tReading ... ");
+    printStrLn("\tReading ... ");
     fileResult = f_read(&bootFile, fileBuffer, -1, &bytesRead);
 
     // close file & unmount
-    printStr("\r\n\tClosing ... ");
+    printStrLn("\tClosing ... ");
     f_close(&bootFile);
     f_unmount("");
 
-    printStr("\r\n\tDone ... ");
+    printStrLn("\tDone ... ");
     return (unsigned char)fileResult;
 }

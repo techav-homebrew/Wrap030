@@ -6,6 +6,16 @@
 
 
 #define DISKTIMEOUT 0x00007fff
+#define RETRYCOUNT 10
+
+
+#define WDISK_DNE       -1  /* disk does not exist */
+#define WDISK_PARERR    -2  /* bad parameter*/
+#define WDISK_BUSY      -3  /* disk busy timeout */
+#define WDISK_ERROR     -4  /* disk reported an error */
+#define WDISK_NRDY      -5  /* disk not ready timeout */
+#define WDISK_OK         0  /* status good */
+
 
 #define IDE_STATUS_BSY (1 << 7)
 #define IDE_STATUS_DRDY (1 << 6)
@@ -32,7 +42,7 @@ extern BYTE const volatile ideDevAddressRO;
 
 DSTATUS wrap030_disk_status(BYTE);
 DSTATUS wrap030_disk_initialize(BYTE);
-DSTATUS wrap030_disk_read(BYTE,BYTE*,LBA_t,UINT);
+int wrap030_disk_read(BYTE,BYTE*,LBA_t,UINT);
 
 #if FF_FS_READONLY == 0
 DRESULT wrap030_disk_write(BYTE, const BYTE*, LBA_t, UINT);
@@ -40,6 +50,7 @@ DRESULT wrap030_disk_write(BYTE, const BYTE*, LBA_t, UINT);
 
 DRESULT wrap030_disk_ioctl(BYTE, BYTE, void*);
 
+BYTE wrap030_disk_busy();
 BYTE wrap030_disk_read_ready();
 BYTE wrap030_wait_for_disk_read_ready();
 

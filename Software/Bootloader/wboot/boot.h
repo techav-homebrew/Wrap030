@@ -11,4 +11,7 @@ FATFS fs;
 // load BOOT.BIN from disk to RAM address 0
 unsigned char LoadBootBin();
 
+FATFS FatFilesystems[FF_VOLUMES];
+
+
 #endif

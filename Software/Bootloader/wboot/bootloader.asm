@@ -98,6 +98,14 @@ COLDBOOT:
     lea     %pc@(strOk),%a0                 |;
     ldrPrintStr                             |;
 
+.initRuntimeVbr:
+    lea     %pc@(strSetVbrRuntime),%a0      |;
+    ldrPrintStr                             |;
+    lea     VECTORSRUNTIME,%a0              |;
+    movec   %a0,%vbr                        |;
+    lea     %pc@(strOk),%a0                 |;
+    ldrPrintStr
+
 
 .testC:
     lea     %pc@(strTestC),%a0              |;
@@ -156,7 +164,10 @@ strError:
     .ascii  "Error.\r\n\0"
 
 strSetVbr:
-    .ascii  "Setting vector base register ... \0"
+    .ascii  "Setting initial vector base register ... \0"
+
+strSetVbrRuntime:
+    .ascii  "Setting runtime VBR ... \0"
 
 strClearOverlay:
     .ascii  "Disabling overlay ... \0"

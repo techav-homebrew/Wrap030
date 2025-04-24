@@ -11,6 +11,7 @@
 #include "diskio.h"		/* Declarations of disk functions */
 
 #include "../wdisk/wdisk.h"	// Wrap030-specific implementations
+#include "../wboot/acia.h"
 
 /* Definitions of physical drive number for each drive */
 #define DEV_RAM		0	/* Example: Map Ramdisk to physical drive 0 */
@@ -142,7 +143,30 @@ DRESULT disk_read (
 	}
 	return RES_PARERR;
 	*/
-	return wrap030_disk_read(pdrv,buff,sector,count);
+	//return wrap030_disk_read(pdrv,buff,sector,count);
+	int retryCount = RETRYCOUNT;
+	while(retryCount--)
+	{
+		int readStatus = wrap030_disk_read(pdrv,buff,sector,count);
+		switch (readStatus)
+		{
+		case WDISK_OK:
+			return RES_OK;
+			break;
+		case WDISK_PARERR:
+			return RES_PARERR;
+			break;
+		default:
+			#ifdef DEBUG
+			printStr("*DISK_READ* read error 0x");
+			printHexWord(readStatus);
+			if(retryCount) printStrLn(". Retrying.");
+			else printStrLn(". Giving up.");
+			#endif
+			break;
+		}
+	}
+	return RES_ERROR;
 }
 
 

@@ -65,18 +65,22 @@ SECTIONS{
         VECTORS = .;
         wboot/vectors.o (text)
         . = ALIGN(4096);
+        VECTORSRUNTIME = .;
+        wboot/vectors-runtime.o (text)
+        . = ALIGN(4096);
     } > rom AT> ram = 0xff
     .bootloader :
     {
         RESETENTRY = .;
         wboot/bootloader.o (text)
         . = ALIGN(4);
-        wboot/boot.o (text)
-        libc/*.o (text)
-        libff/*.o (text)
-        wdisk/*.o (text)
+        wboot/boot.o (.text)
+        wboot/acia.o (.text)
+        libc/*.o (.text)
+        libff/*.o (.text)
+        wdisk/*.o (.text)
     } > rom AT> ram = 0xff
-    .bss (ramTop + 1 - 2048) :
+    .bss (ramTop + 1 - 4096) :
     {
         /* put bss at top of RAM so it doesn't interfere with loading the
          * boot file to the bottom of RAM */
@@ -84,6 +88,10 @@ SECTIONS{
         libc/*.o (bss)
         libff/*.o (bss)
         wdisk/*.o (bss)
+        wboot/*.o (.bss)
+        libc/*.o (.bss)
+        libff/*.o (.bss)
+        wdisk/*.o (.bss)
     }
 }
 

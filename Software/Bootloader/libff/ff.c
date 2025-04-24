@@ -24,6 +24,7 @@
 #include "ff.h"			/* Declarations of FatFs API */
 #include "diskio.h"		/* Declarations of device I/O functions */
 
+#include "../wboot/acia.h"
 
 /*--------------------------------------------------------------------------
 
@@ -491,7 +492,23 @@ static const char *const VolumeStr[FF_VOLUMES] = {FF_VOLUME_STRS};	/* Pre-define
 static const BYTE GUID_MS_Basic[16] = {0xA2,0xA0,0xD0,0xEB,0xE5,0xB9,0x33,0x44,0x87,0xC0,0x68,0xB6,0xB7,0x26,0x99,0xC7};
 #endif
 
+static FATFS FatFileSystems[FF_VOLUMES];
 
+void f_initialize()
+{
+	int i,j;
+	BYTE* p;
+	for(i=0; i<FF_VOLUMES; i++)
+	{
+		p = (BYTE*)&FatFileSystems;
+		for(j=0; j<sizeof(FATFS); j++)
+		{
+			*p++ = 0;
+		}
+		FatFs[i] = &FatFileSystems[i];
+	}
+	Fsid = 0;
+}
 
 /*--------------------------------*/
 /* LFN/Directory working buffer   */
@@ -618,16 +635,23 @@ static const BYTE DbcTbl[] = MKCVTBL(TBL_DC, FF_CODE_PAGE);
 /* Load/Store multi-byte word in the FAT structure                       */
 /*-----------------------------------------------------------------------*/
 
-static WORD ld_word (const BYTE* ptr)	/*	 Load a 2-byte little-endian word */
+//static 
+WORD ld_word (const BYTE* ptr)	/*	 Load a 2-byte little-endian word */
 {
 	WORD rv;
 
+	#ifdef ENDIANSWAP
+	rv = ptr[0];
+	rv = rv << 8 | ptr[1];
+	#else
 	rv = ptr[1];
 	rv = rv << 8 | ptr[0];
+	#endif
 	return rv;
 }
 
-static DWORD ld_dword (const BYTE* ptr)	/* Load a 4-byte little-endian word */
+//static 
+DWORD ld_dword (const BYTE* ptr)	/* Load a 4-byte little-endian word */
 {
 	DWORD rv;
 
@@ -643,6 +667,16 @@ static QWORD ld_qword (const BYTE* ptr)	/* Load an 8-byte little-endian word */
 {
 	QWORD rv;
 
+	#ifdef ENDIANSWAP
+	rv = ptr[0];
+	rv = rv << 8 | ptr[1];
+	rv = rv << 8 | ptr[2];
+	rv = rv << 8 | ptr[3];
+	rv = rv << 8 | ptr[4];
+	rv = rv << 8 | ptr[5];
+	rv = rv << 8 | ptr[6];
+	rv = rv << 8 | ptr[7];
+	#else
 	rv = ptr[7];
 	rv = rv << 8 | ptr[6];
 	rv = rv << 8 | ptr[5];
@@ -651,6 +685,7 @@ static QWORD ld_qword (const BYTE* ptr)	/* Load an 8-byte little-endian word */
 	rv = rv << 8 | ptr[2];
 	rv = rv << 8 | ptr[1];
 	rv = rv << 8 | ptr[0];
+	#endif
 	return rv;
 }
 #endif
@@ -3313,9 +3348,18 @@ static UINT check_fs (	/* 0:FAT/FAT32 VBR, 1:exFAT VBR, 2:Not FAT and valid BS, 
 	WORD w, sign;
 	BYTE b;
 
+	#ifdef DEBUG
+	printStrLn("*CHECK_FS* debug enabled");
+	#endif
 
 	fs->wflag = 0; fs->winsect = (LBA_t)0 - 1;		/* Invaidate window */
-	if (move_window(fs, sect) != FR_OK) return 4;	/* Load the boot sector */
+	if (move_window(fs, sect) != FR_OK) 
+	{
+		#ifdef DEBUG
+		printStrLn("*CHECK_FS* returning 4");
+		#endif
+		return 4;	/* Load the boot sector */
+	}
 	sign = ld_word(fs->win + BS_55AA);
 #if FF_FS_EXFAT
 	if (sign == 0xAA55 && !memcmp(fs->win + BS_JmpBoot, "\xEB\x76\x90" "EXFAT   ", 11)) return 1;	/* It is an exFAT VBR */
@@ -3323,6 +3367,9 @@ static UINT check_fs (	/* 0:FAT/FAT32 VBR, 1:exFAT VBR, 2:Not FAT and valid BS, 
 	b = fs->win[BS_JmpBoot];
 	if (b == 0xEB || b == 0xE9 || b == 0xE8) {	/* Valid JumpBoot code? (short jump, near jump or near call) */
 		if (sign == 0xAA55 && !memcmp(fs->win + BS_FilSysType32, "FAT32   ", 8)) {
+			#ifdef DEBUG
+			printStrLn("*CHECK_FS* returning 0 for FAT32 VBR");
+			#endif
 			return 0;	/* It is an FAT32 VBR */
 		}
 		/* FAT volumes created in the early MS-DOS era lack BS_55AA and BS_FilSysType, so FAT VBR needs to be identified without them. */
@@ -3335,10 +3382,33 @@ static UINT check_fs (	/* 0:FAT/FAT32 VBR, 1:exFAT VBR, 2:Not FAT and valid BS, 
 			&& ld_word(fs->win + BPB_RootEntCnt) != 0	/* Properness of root dir size (MNBZ) */
 			&& (ld_word(fs->win + BPB_TotSec16) >= 128 || ld_dword(fs->win + BPB_TotSec32) >= 0x10000)	/* Properness of volume size (>=128) */
 			&& ld_word(fs->win + BPB_FATSz16) != 0) {	/* Properness of FAT size (MNBZ) */
+				#ifdef DEBUG
+				printStrLn("*CHECK_FS* presuming FAT VBR, returning 0");
+				#endif
 				return 0;	/* It can be presumed an FAT VBR */
 		}
 	}
+	#ifndef DEBUG
 	return sign == 0xAA55 ? 2 : 3;	/* Not an FAT VBR (with valid or invalid BS) */
+	#else
+	if(sign == 0xAA55)
+	{
+		printStrLn("*CHECK_FS* magic number is AA55, returning 2");
+		return 2;
+	}
+	else if(sign == 0x55AA)
+	{
+		printStrLn("*CHECK_FS* magic number is endian-swapped. returning 3");
+		return 3;
+	}
+	else
+	{
+		printStr("*CHECK_FS* bad magic number: ");
+		printHexWord(sign);
+		printStrLn(", returning 3");
+		return 3;
+	}
+	#endif
 }
 
 
@@ -3347,15 +3417,24 @@ static UINT check_fs (	/* 0:FAT/FAT32 VBR, 1:exFAT VBR, 2:Not FAT and valid BS, 
 
 static UINT find_volume (	/* Returns BS status found in the hosting drive */
 	FATFS* fs,		/* Filesystem object */
-	UINT part		/* Partition to fined = 0:find as SFD and partitions, >0:forced partition number */
+	UINT part		/* Partition to find = 0:find as SFD and partitions, >0:forced partition number */
 )
 {
 	UINT fmt, i;
 	DWORD mbr_pt[4];
 
+	#ifdef DEBUG
+	printStrLn("*FIND_VOLUME* debug enabled");
+	#endif
 
 	fmt = check_fs(fs, 0);				/* Load sector 0 and check if it is an FAT VBR as SFD format */
-	if (fmt != 2 && (fmt >= 3 || part == 0)) return fmt;	/* Returns if it is an FAT VBR as auto scan, not a BS or disk error */
+	if (fmt != 2 && (fmt >= 3 || part == 0)) 
+	{
+		#ifdef DEBUG
+		printStrLn("*FIND_VOLUME* returning FAT VBR");
+		#endif
+		return fmt;	/* Returns if it is an FAT VBR as auto scan, not a BS or disk error */
+	}
 
 	/* Sector 0 is not an FAT VBR or forced partition number wants a partition */
 
@@ -3381,14 +3460,31 @@ static UINT find_volume (	/* Returns BS status found in the hosting drive */
 		return 3;	/* Not found */
 	}
 #endif
-	if (FF_MULTI_PARTITION && part > 4) return 3;	/* MBR has 4 partitions max */
+	if (FF_MULTI_PARTITION && part > 4) 
+	{
+		#ifdef DEBUG
+		printStrLn("*FIND_VOLUME* returning 3");
+		#endif
+		return 3;	/* MBR has 4 partitions max */
+	}
 	for (i = 0; i < 4; i++) {		/* Load partition offset in the MBR */
 		mbr_pt[i] = ld_dword(fs->win + MBR_Table + i * SZ_PTE + PTE_StLba);
+		#ifdef DEBUG
+		printStr("*FIND_VOLUME* partition pointer: 0x");
+		printHexLong(mbr_pt[i]);
+		printStr("\r\n");
+		#endif
 	}
 	i = part ? part - 1 : 0;		/* Table index to find first */
 	do {							/* Find an FAT volume */
 		fmt = mbr_pt[i] ? check_fs(fs, mbr_pt[i]) : 3;	/* Check if the partition is FAT */
 	} while (part == 0 && fmt >= 2 && ++i < 4);
+	
+	#ifdef DEBUG
+	printStr("*FIND_VOLUME* returning 0x");
+	printHexLong(fmt);
+	printStrLn("");
+	#endif
 	return fmt;
 }
 
@@ -3413,27 +3509,56 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 	WORD nrsv;
 	UINT fmt;
 
+	#ifdef DEBUG
+	printStrLn("*MOUNT_VOLUME* debug enabled");
+	#endif
+
 
 	/* Get logical drive number */
 	*rfs = 0;
 	vol = get_ldnumber(path);
-	if (vol < 0) return FR_INVALID_DRIVE;
+	if (vol < 0) 
+	{
+		#ifdef DEBUG
+		printStr("*MOUNT_VOLUME* FR_INVALID_DRIVE: 0x");
+		printHexLong(vol);
+		printStrLn("");
+		#endif
+		return FR_INVALID_DRIVE;
+	}
 
 	/* Check if the filesystem object is valid or not */
 	fs = FatFs[vol];					/* Get pointer to the filesystem object */
-	if (!fs) return FR_NOT_ENABLED;		/* Is the filesystem object available? */
+	if (!fs) 							/* Is the filesystem object available? */
+	{
+		#ifdef DEBUG
+		printStr("*MOUNT_VOLUME* FR_NOT_ENABLED: 0x");
+		printHexLong((int)fs);
+		printStrLn("");
+		#endif
+		return FR_NOT_ENABLED;		
+	}
 #if FF_FS_REENTRANT
 	if (!lock_volume(fs, 1)) return FR_TIMEOUT;	/* Lock the volume, and system if needed */
 #endif
 	*rfs = fs;							/* Return pointer to the filesystem object */
 
+	#ifdef DEBUG
+	printStrLn("*MOUNT_VOLUME* checking disk status");
+	#endif
 	mode &= (BYTE)~FA_READ;				/* Desired access mode, write access or not */
 	if (fs->fs_type != 0) {				/* If the volume has been mounted */
 		stat = disk_status(fs->pdrv);
 		if (!(stat & STA_NOINIT)) {		/* and the physical drive is kept initialized */
 			if (!FF_FS_READONLY && mode && (stat & STA_PROTECT)) {	/* Check write protection if needed */
+				#ifdef DEBUG
+				printStrLn("*MOUNT_VOLUME* FR_WRITE_PROTECTED");
+				#endif
 				return FR_WRITE_PROTECTED;
 			}
+			#ifdef DEBUG
+			printStrLn("*MOUNT_VOLUME* FR_OK (filesystem object is already valid)");
+			#endif
 			return FR_OK;				/* The filesystem object is already valid */
 		}
 	}
@@ -3441,12 +3566,22 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 	/* The filesystem object is not valid. */
 	/* Following code attempts to mount the volume. (find an FAT volume, analyze the BPB and initialize the filesystem object) */
 
+	#ifdef DEBUG
+	printStrLn("*MOUNT_VOLUME* attempting to mount volume");
+	#endif
+
 	fs->fs_type = 0;					/* Invalidate the filesystem object */
 	stat = disk_initialize(fs->pdrv);	/* Initialize the volume hosting physical drive */
 	if (stat & STA_NOINIT) { 			/* Check if the initialization succeeded */
+		#ifdef DEBUG
+		printStrLn("*MOUNT_VOLUME* FR_NOT_READY");
+		#endif
 		return FR_NOT_READY;			/* Failed to initialize due to no medium or hard error */
 	}
 	if (!FF_FS_READONLY && mode && (stat & STA_PROTECT)) { /* Check disk write protection if needed */
+		#ifdef DEBUG
+		printStrLn("*MOUNT_VOLUME* FR_WRITE_PROTECTED");
+		#endif
 		return FR_WRITE_PROTECTED;
 	}
 #if FF_MAX_SS != FF_MIN_SS				/* Get sector size (multiple sector size cfg only) */
@@ -3455,13 +3590,30 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 #endif
 
 	/* Find an FAT volume on the hosting drive */
+	#ifdef DEBUG
+	printStrLn("*MOUNT_VOLUME* looking for FAT volume on host drive");
+	#endif
 	fmt = find_volume(fs, LD2PT(vol));
-	if (fmt == 4) return FR_DISK_ERR;		/* An error occurred in the disk I/O layer */
-	if (fmt >= 2) return FR_NO_FILESYSTEM;	/* No FAT volume is found */
+	if (fmt == 4) 							/* An error occurred in the disk I/O layer */
+	{
+		#ifdef DEBUG
+		printStrLn("*MOUNT_VOLUME* a disk error occurred looking for volume");
+		#endif
+		return FR_DISK_ERR;		
+	}
+	if (fmt >= 2) 							/* No FAT volume is found */
+	{
+		#ifdef DEBUG
+		printStrLn("*MOUNT_VOLUME* no FAT volume found on disk");
+		#endif
+		return FR_NO_FILESYSTEM;	
+	}
 	bsect = fs->winsect;					/* Volume offset in the hosting physical drive */
 
 	/* An FAT volume is found (bsect). Following code initializes the filesystem object */
-
+	#ifdef DEBUG
+	printStrLn("*MOUNT_VOLUME* Reading filesystem header");
+	#endif
 #if FF_FS_EXFAT
 	if (fmt == 1) {
 		QWORD maxlba;
@@ -3616,6 +3768,9 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 #if FF_FS_LOCK				/* Clear file lock semaphores */
 	clear_share(fs);
 #endif
+	#ifdef DEBUG
+	printStrLn("*MOUNT_VOLUME* done.");
+	#endif
 	return FR_OK;
 }
 
@@ -3746,13 +3901,26 @@ FRESULT f_open (
 #endif
 	DEF_NAMBUF
 
+	#ifdef DEBUG
+	printStrLn("*F_OPEN* debug enabled");
+	#endif
 
-	if (!fp) return FR_INVALID_OBJECT;
+
+	if (!fp) 
+	{
+		#ifdef DEBUG
+		printStrLn("*F_OPEN* bad file pointer");
+		#endif
+		return FR_INVALID_OBJECT;
+	}
 
 	/* Get logical drive number */
 	mode &= FF_FS_READONLY ? FA_READ : FA_READ | FA_WRITE | FA_CREATE_ALWAYS | FA_CREATE_NEW | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
 	res = mount_volume(&path, &fs, mode);
 	if (res == FR_OK) {
+		#ifdef DEBUG
+		printStrLn("*F_OPEN* mount_volume OK");
+		#endif
 		dj.obj.fs = fs;
 		INIT_NAMBUF(fs);
 		res = follow_path(&dj, path);	/* Follow the file path */
@@ -3850,9 +4018,15 @@ FRESULT f_open (
 		if (res == FR_OK) {
 			if (dj.fn[NSFLAG] & NS_NONAME) {	/* Is it origin directory itself? */
 				res = FR_INVALID_NAME;
+				#ifdef DEBUG
+				printStrLn("*F_OPEN* FR_INVALID_NAME");
+				#endif
 			} else {
 				if (dj.obj.attr & AM_DIR) {		/* Is it a directory? */
 					res = FR_NO_FILE;
+					#ifdef DEBUG
+					printStrLn("*F_OPEN* FR_NO_FILE");
+					#endif
 				}
 			}
 		}
@@ -3918,6 +4092,10 @@ FRESULT f_open (
 	if (res != FR_OK) fp->obj.fs = 0;	/* Invalidate file object on error */
 
 	LEAVE_FF(fs, res);
+	
+	#ifdef DEBUG
+	printStrLn("*F_OPEN* Complete");
+	#endif
 }
 
 
