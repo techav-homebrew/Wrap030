@@ -43,6 +43,10 @@ COBJS = $(patsubst %.c,%.o,$(CSRCS))
 $(info DEBUG-OBJS $(OBJS))
 $(info DEBUG-SUBDIRS $(SUBDIRS))
 
+boot.bin: rom.out
+	$(OC) $(OCFLAGS) rom.out -O binary BOOT.BIN
+	$(OC) $(OCFLAGS) rom.out -O srec multibasic.srec
+
 rom.srec: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
 	$(OC) $(OCFLAGS) rom.out -O ihex rom.hex

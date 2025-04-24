@@ -1,134 +1,222 @@
 |; initial boot vectors
 
     .section    text,"ax"
-    .include    "kmacros.inc"
+    |;.include    "kmacros.inc"
     .extern STACKINIT
     .extern RESETVECTOR
-    |;.extern SysTrap
-    .extern SysTrapRAM
     .extern USERTABLE
     .extern USERNUM
     .extern kUserTblInit
     .extern NextUser
 
+
 vector:
-    dc.l    STACKINIT           |;  0   000 reset interrupt stack pointer
-    dc.l    RESETVECTOR         |;  1   004 reset vector
-    dc.l    exceptionTypeF      |;  2   008 bus error
-    dc.l    exceptionTypeF      |;  3   00c address error
-    dc.l    exceptionType2      |;  4   010 illegal instruction
-    dc.l    exceptionType2      |;  5   014 divide by zero
-    dc.l    exceptionType1      |;  6   018 CHK/CHK2
-    dc.l    exceptionType1      |;  7   01c TRAPcc/TRAPV
-    dc.l    exceptionType2      |;  8   020 privilege violation
-    dc.l    exceptionType1      |;  9   024 trace
-    dc.l    exceptionType2      |; 10   028 A-trap
-    dc.l    exceptionType2      |; 11   02c F-trap
-    dc.l    exceptionType1      |; 12   030 reserved
-    dc.l    exceptionType2      |; 13   034 coprocessor protocol violation
-    dc.l    exceptionType2      |; 14   038 format error
-    dc.l    exceptionType1      |; 15   03c uninitialized interrupt
-    .dcb.l  8,exceptionType1    |; 16-23    040-05c reserved
-    dc.l    exceptionType1      |; 24   060 spurious interrupt
-    dc.l    exceptionType1      |; 25   064 autovector 1
-    dc.l    exceptionType1      |; 26   068 autovector 2
-    dc.l    exceptionType1      |; 27   06c autovector 3
-    dc.l    exceptionType1      |; 28   070 autovector 4
-    dc.l    exceptionType1      |; 29   074 autovector 5
-    dc.l    exceptionType1      |; 30   078 autovector 6
-    dc.l    exceptionType1      |; 31   07c autovector 7
-    dc.l    SysTrap             |; 32   080 trap 0
-    dc.l    exceptionType1      |; 33   084 trap 1
-    dc.l    exceptionType1      |; 34   088 trap 2
-    dc.l    exceptionType1      |; 35   08c trap 3
-    dc.l    exceptionType1      |; 36   090 trap 4
-    dc.l    exceptionType1      |; 37   094 trap 5
-    dc.l    exceptionType1      |; 38   098 trap 6
-    dc.l    exceptionType1      |; 39   09c trap 7
-    dc.l    exceptionType1      |; 40   0a0 trap 8
-    dc.l    exceptionType1      |; 41   0a4 trap 9
-    dc.l    exceptionType1      |; 42   0a8 trap 10
-    dc.l    exceptionType1      |; 43   0ac trap 11
-    dc.l    exceptionType1      |; 44   0b0 trap 12
-    dc.l    exceptionType1      |; 45   0b4 trap 13
-    dc.l    exceptionType1      |; 46   0b8 trap 14
-    dc.l    exceptionType1      |; 47   0bc trap 15
-    dc.l    exceptionType2      |; 48   0c0 FPU branch or set on unordered condition
-    dc.l    exceptionType2      |; 49   0c4 FPU inexact result
-    dc.l    exceptionType2      |; 50   0c8 FPU divide by zero
-    dc.l    exceptionType2      |; 51   0cc FPU underflow
-    dc.l    exceptionType2      |; 52   0d0 FPU operand error
-    dc.l    exceptionType2      |; 53   0d4 FPU overflow
-    dc.l    exceptionType2      |; 54   0d8 FPU NaN
-    dc.l    exceptionType1      |; 55   0dc reserved
-    dc.l    exceptionType2      |; 56   0e0 MMU configuration error
-    dc.l    exceptionType2      |; 57   0e4 68851 reserved
-    dc.l    exceptionType2      |; 58   0e8 68851 reserved
-    .dcb.l  5,exceptionType1    |; 59-63    0ec-0fc reserved
-    .dcb.l  64,exceptionType1   |; 64-127   100-1fc User-defined
-    .dcb.l  128,exceptionType1  |; 128-255  200-3fc User-defined
+    bra.w   WARMBOOT
+    dc.l    RESETVECTOR
+    .dcb.l  14,printException
+    .dcb.l  8,printException
+    .dcb.l  8,printException
+    dc.l    SysTrap
+    .dcb.l  223,printException
+
+    .include    "kmacros.inc"
+
+    .macro  exceptPrintStrS strRef
+    lea     %pc@(\strRef),%a0               |; get string pointer
+    bsr     exceptPrintStr                  |; and print it
+    .endm
+
+exceptPrintStr:
+    move.b  %a0@+,%d0                       |; get next string byte
+    beq.s   2f                              |; end print if null
+1:  btst    #1,acia1Com                     |; check tx ready bit
+    beq.s   1b                              |; wait until ready
+    move.b  %d0,acia1Dat                    |; print byte
+    bra     exceptPrintStr                  |; loop until done
+2:  rts
+
+    .macro  exceptPrintNyb
+    andi.b  #0x0f,%d0                       |; mask off nybble
+    cmpi.b  #0x0a,%d0                       |; check if number or letter
+    blt.s   L\@num                          |; branch if number
+    addi.b  #0x37,%d0                       |; make ascii letter
+    bra.s   L\@prt                          |; jump to print
+L\@num:
+    addi.b  #0x30,%d0                       |; make ascii number
+L\@prt:
+    btst    #1,acia1Com                     |; check if ready
+    beq.s   L\@prt                          |; wait until ready
+    move.b  %d0,acia1Dat                    |; print byte
+    .endm
+
+exceptPrintWord:
+    debugPrintHexWord
+    rts
+
+exceptPrintLong:
+    debugPrintHexLong
+    rts
+    
 
 
-|; type 1 exception will be exceptions we can recover from
-|; and return to the current user without issue
-exceptionType1:
-    bsr     printVector                     |; print vector name string
-    rte                                     |; return to current user
+printException:
+    link    %a6,#-8                         |; space for local vars
+    move.l  %d0,%a6@(-4)                    |; save working registers
+    move.l  %a0,%a6@(-8)                    |;
 
-|; fatal exceptions (bus error / address error)
-|; we'll need to update the Special Status Word on the stack frame so that
-|; the CPU will not retry the instruction or bus cycle that caused the error
-exceptionTypeF:
-    andi.w  #0xCEFF,%sp@(0x0a)              |; clear retry bits
-    |; fall through to the Type2 exception handler
+    exceptPrintStrS strHead
 
-|; type 2 exception will be exceptions we cannot recover from
-|; and the user will need to be reinitialized
-exceptionType2:
-    bsr     printVector                     |; print vector name string
+    move.w  %a6@(10),%d0                    |; get vector offset
+    andi.w  #0x0fff,%d0                     |; mask off format bits
+    movea.l %pc@(vectorNameTable,%d0:w:1),%a0 |; get pointer to exception name
+    bsr     exceptPrintStr                  |; print exception name
+
+    exceptPrintStrS strUser                 |; print current user number
+    move.w  USERNUM,%d0                     |;
+    bsr     exceptPrintWord                 |;
+
+    exceptPrintStrS strRegPC                |; print PC
+    move.l  %a6@(6),%d0                     |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegSR                |; print SR
+    move.w  %a6@(4),%d0                     |;
+    bsr     exceptPrintWord                 |;
+
+    exceptPrintStrS strRegD0                |; print D0
+    move.l  %a6@(-4),%d0                    |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA0                |; print A0
+    move.l  %a6@(-8),%d0                    |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD1                |; print D1
+    move.l  %d1,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA1                |; print A1
+    move.l  %a1,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD2                |; print D2
+    move.l  %d2,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA2                |; print A2
+    move.l  %a2,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD3                |; print D3
+    move.l  %d3,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA3                |; print A3
+    move.l  %a3,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD4                |; print D4
+    move.l  %d4,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA4                |; print A4
+    move.l  %a4,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD5                |; print D5
+    move.l  %d5,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA5                |; print A5
+    move.l  %a5,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD6                |; print D6
+    move.l  %d6,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA6                |; print A6
+    move.l  %a6,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegD7                |; print D7
+    move.l  %d7,%d0                         |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegA1                |; print A7
+    move.l  %a6,%d0                         |;
+    addq.l  #4,%d0                          |;
+    bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strPCTrace              |; print last few instructions
+    move.l  %a6@(6),%a0                     |; get current PC
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%sp@-
+    move.l  %a0@-,%d0
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCSpace
+    move.l  %sp@+,%d0
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCSpace
+    move.l  %sp@+,%d0
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCSpace
+    move.l  %sp@+,%d0
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCTrac1
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCSpace
+    move.l  %sp@+,%d0
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCSpace
+    move.l  %sp@+,%d0
+    bsr     exceptPrintLong
+    exceptPrintStrS strPCSpace
+    move.l  %sp@+,%d0
+    bsr     exceptPrintLong
+
+
+    move.w  %a6@(10),%d0                    |; get frame format
+    rol.w   #4,%d0                          |; move into position
+    andi.w  #0x0f,%d0                       |; mask out vector offset
+    cmpi.w  #0x0a,%d0                       |; check if fault frame 
+    bge.s   exceptFault                     |;
+    cmpi.w  #0x02,%d0                       |; check if trap frame
+    bge.s   exceptTrap                      |;
+
+exceptPrintEnd:
+    exceptPrintStrS strFoot                 |; print footer
+    move.l  %a6@(-8),%a0                    |; restore registers
+    move.l  %a6@(-4),%d0                    |;
+    unlk    %a6                             |; unlink stack frame
+    rte                                     |; return from exception
+
+exceptTrap:
+    exceptPrintStrS strInstr
+    move.l  %a6@(12),%d0                    |; get instruction pointer
+    bsr     exceptPrintLong                 |;
+    bra     exceptPrintEnd                  |; done.
+
+exceptFault:
+    exceptPrintStrS strFault
+    move.l  %a6@(14),%d0                    |; get data cycle fault address
+    bsr     exceptPrintLong                 |;
+    andi.w  #0xCEFF,%a6@(14)                |; clear retry bits
 
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get current user number
     jsr     kUserTblInit                    |; reinitialize current user
 
     lea     NextUser,%a0                    |; update return address to switch
-    move.l  %a0,%sp@(2)                     |;  to next user on rte
-    rte                                     |;
+    move.l  %a0,%a6@(6)                     |;  to next user on rte
+    bra     exceptPrintEnd                  |; done
 
-|; print exception name & data from exception stack frame
-printVector:
-    move.w  %sr,wordSR
-    move.w  %sp@(4),frameStatus
-    move.l  %sp@(6),framePC
-    move.w  %sp@(10),frameVector
-    movem.l %d0/%a0,%sp@-                   |; save working registers
-    
-    |; print exception data
-    debugPrintStrI "\r\nException: "
-    move.w  wordSR,%d0
-    debugPrintHexWord
-    debugPrintStrI ","
-    move.w  frameStatus,%d0
-    debugPrintHexWord
-    debugPrintStrI ","
-    move.l  framePC,%d0
-    debugPrintHexLong
-    debugPrintStrI ","
-    move.l  frameVector,%d0
-    debugPrintHexWord
-    debugPrintStrI " - "
 
-    |; print vector name
-    move.w  frameVector,%d0
-    andi.w  #0x0fff,%d0                     |; mask vector offset
-    lea     %pc@(vectorNameTable),%a0       |; get pointer to string pointer table
-    move.l  %a0@(%d0.w),%a0                 |; get string pointer
-    debugPrintStr                           |; print vector name
-
-    |; print new prompt
-    debugPrintStrI "\r\n> "
-    movem.l %sp@+,%d1/%a0                   |; restore working registers
-    rts
 
 |; table of pointers to friendly name strings for all vectors
 vectorNameTable:
@@ -189,6 +277,33 @@ vectorNameTable:
     .dcb.l  128,strUnused   |; 128-255  200-3fc
 
 
+strHead:    .ascii  "\r\n\r\n!!!!!!!!!! EXCEPTION: \0"
+strUser:    .ascii  " !!!!!!!!!!\r\n  User: \0"
+strRegPC:   .ascii  "\r\n  PC: 0x\0"
+strRegD0:   .ascii  "\r\n  D0: 0x\0"
+strRegD1:   .ascii  "\r\n  D1: 0x\0"
+strRegD2:   .ascii  "\r\n  D2: 0x\0"
+strRegD3:   .ascii  "\r\n  D3: 0x\0"
+strRegD4:   .ascii  "\r\n  D4: 0x\0"
+strRegD5:   .ascii  "\r\n  D5: 0x\0"
+strRegD6:   .ascii  "\r\n  D6: 0x\0"
+strRegD7:   .ascii  "\r\n  D7: 0x\0"
+strRegSR:   .ascii  " SR: 0x\0"
+strRegA0:   .ascii  " A0: 0x\0"
+strRegA1:   .ascii  " A1: 0x\0"
+strRegA2:   .ascii  " A2: 0x\0"
+strRegA3:   .ascii  " A3: 0x\0"
+strRegA4:   .ascii  " A4: 0x\0"
+strRegA5:   .ascii  " A5: 0x\0"
+strRegA6:   .ascii  " A6: 0x\0"
+strRegA7:   .ascii  " A7: 0x\0"
+strPCTrace: .ascii  "\r\n  Program:\r\n    0x\0"
+strPCSpace: .ascii  " 0x\0"
+strPCTrac1: .ascii  "\r\n    0x\0"
+strFault:   .ascii  "\r\n  Fault Address: 0x\0"
+strInstr:   .ascii  "\r\n  Instruction Pointer: 0x\0"
+strFoot:    .ascii  "\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n\r\n> \0"
+
 |; table of friendly name strings for all vectors
 vectorNames:
 strBusErr:      .ascii  "Bus Error\0"
@@ -240,9 +355,3 @@ strMmuConfigErr: .ascii "MMU Config Err\0"
 strMmuUnused:   .ascii  "MMU Err\0"
     .even
 
-
-    .section    bss,"w"
-wordSR:        ds.w    1
-frameStatus:    ds.w    1
-framePC:        ds.l    1
-frameVector:    ds.w    1
