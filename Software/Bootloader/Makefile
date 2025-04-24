@@ -32,7 +32,8 @@ CP = cp -f
 endif
 
 EXCLUDE := linker.ld/. Makefile/. rom.bin/. rom.hex/. rom.map/. rom.out/. rom.srec/.
-SUBDIRS := $(filter-out $(EXCLUDE),$(wildcard */.))
+# SUBDIRS := $(filter-out $(EXCLUDE),$(wildcard */.))
+SUBDIRS := libc libff wboot wdisk
 
 SRCS = $(wildcard */*.asm)
 OBJS = $(patsubst %.asm,%.o,$(SRCS))
@@ -42,10 +43,6 @@ COBJS = $(patsubst %.c,%.o,$(CSRCS))
 
 $(info DEBUG-OBJS $(OBJS))
 $(info DEBUG-SUBDIRS $(SUBDIRS))
-
-boot.bin: rom.out
-	$(OC) $(OCFLAGS) rom.out -O binary BOOT.BIN
-	$(OC) $(OCFLAGS) rom.out -O srec multibasic.srec
 
 rom.srec: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
@@ -66,9 +63,6 @@ $(COBJS): $(CSRCS)
 
 clean: $(SUBDIRS)
 $(SUBDIRS):
-	-$(RM) *.o *.out *.L68 *.srec *.map *.i *.hex *.bin
+	-$(RM) *.o *.out *.L68 *.srec *.map *.i *.hex *.bin *.dump
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 .PHONY: clean $(SUBDIRS)
-
-burn: rom.srec
-	$(PYTHON) ..\..\Utilities\srecLoadRAMwin.py COM6 rom.srec

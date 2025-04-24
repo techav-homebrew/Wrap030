@@ -10,14 +10,23 @@
     .section text,"ax"
 
 WARMBOOT:
-    lea     SUPVSTACKINIT,%sp               |; initialize stack pointer
+    lea     SUPVSTACKINIT,%a0               |; reset supv stack pointer
+    movec   %a0,%msp                        |;
+    lea     STACKINIT,%a0                   |; reset irq stack pointer
+    movec   %a0,%isp                        |;
+    lea     0,%a0                           |; reset VBR
+    movec   %a0,%vbr                        |; 
+    debugPrintStrI "\r\n~~~~ Wrap030 Multibasic ~~~~\r\n"
     |; enable CPU cache
 kEnableCache:
 .ifndef     SIMULATE
     move.l  #0x00000101,%d0                 |; enable data & instruction cache
     movec   %d0,%cacr                       |; write to cache control register
-.endif
     debugPrintStrI "Cache enabled\r\n"
+.endif
+
+    |; initialize user number
+    clr.l   USERNUM                         |;
 
 kInitConsoles:
     |; initialize user console ports
