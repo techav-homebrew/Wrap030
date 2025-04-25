@@ -20,7 +20,7 @@
 supvConsole:
     |; start by checking supervisor UART to see if it has received data
     btst    #0,acia1Com                     |; check status bit
-    beq     _supvExit                       |; if no byte, then exit
+    beq     _supvExitQuiet                  |; if no byte, then exit
     move.b  acia1Dat,%d0                    |; read byte
 
     cmp.b   #0x20,%d0                       |; check for control char
@@ -35,7 +35,7 @@ supvConsole:
 2:
     |; parse
     btst    #7,%d0                          |; ignore any above 127
-    bne     _supvExit
+    bne     _supvExitQuiet
     btst    #6,%d0                          |; set baud command if set
     bne     _supvSetBaud
     btst    #5,%d0                          |; set size/parity if set
@@ -44,15 +44,20 @@ supvConsole:
     bne     _supvSetStopBits
     btst    #3,%d0                          |; reset user if set
     bne     _supvResetUser
+    bra     _supvUserMode                   |; else, toggle user mode
+    /*
     cmp.b   #0,%d0                          |; check cold restart command
     beq     _supvCold
     cmp.b   #1,%d0                          |; check warm restart command
     beq     _supvWarm
+    */
 
 _supvExit:
+    debugPrintStrI "\r\n> "
+_supvExitQuiet:
     rts
 
-
+/*
 _supvCold:
     debugPrintStrI " => COLD REBOOT NOW\r\n"
     |; make sure we're jumping into ROM not RAM
@@ -65,17 +70,17 @@ _supvWarm:
     debugPrintStrI " => WARM REBOOT NOW\r\n"
     lea     %sp@(4),%sp                     |; pop return address off stack
     jmp     WARMBOOT
-
+*/
 
 _supvResetUser:
     debugPrintStrI " => Resetting user "
     and.b   #0x07,%d0                       |; mask off user number
     extb.l  %d0                             |; sign-extend user number to long
-    debugPrintHexByte %d0
+    |; debugPrintHexByte %d0
+    bsr     _supvPrintHexByte
     lea     USERTABLE,%a0                   |; get pointer to user table
     bsr     kUserTblInit                    |; reset user table entry
-    debugPrintStrI "\r\n> "
-    rts
+    bra     _supvExit
 
 
 _supvSetStopBits:
@@ -96,9 +101,10 @@ _supvSetStopBits:
     andi.b  #0xfb,%a0@(comRegLCR)           |; clear bit
     debugPrintStrI " => Setting 1 stop bit for user "
 2:
-    debugPrintHexByte %d1
-    debugPrintStrI "\r\n> "
-    rts
+    |;debugPrintHexByte %d1
+    move.b  %d1,%d0
+    bsr     _supvPrintHexByte
+    bra     _supvExit
 
 
 _supvSetFormat:
@@ -126,9 +132,10 @@ _supvSetFormat:
     move.l  %a0@(%d0.L*4),%a0               |; get pointer to string
 
     debugPrintStr
-    debugPrintHexByte %d1
-    debugPrintStrI "\r\n> "
-    rts
+    |;debugPrintHexByte %d1
+    move.b  %d1,%d0
+    bsr     _supvPrintHexByte
+    bra     _supvExit
 
 
 _supvSetBaud:
@@ -156,9 +163,43 @@ _supvSetBaud:
     lea     %pc@(tblSupvBaudStr),%a1        |; get pointer to string table
     move.l  %a1@(%d0.l*4),%a0               |; get pointer to string
     debugPrintStr
-    debugPrintHexByte %d1
-    debugPrintStrI "\r\n> "
+    |;debugPrintHexByte %d1
+    move.b  %d1,%d0
+    bsr     _supvPrintHexByte
+    bra     _supvExit
+
+_supvUserMode:
+    andi.b  #0x07,%d1                       |; mask user number
+    extb.l  %d1                             |; sign-extend to longword
+    move.l  %d0,%d1                         |; copy user number
+
+    mulu    #utbl_size,%d1                  |; get table offset
+    lea     USERTABLE,%a0                   |; get pointer to user table
+    add.l   %d1,%a0                         |; get user table entry
+    cmpi.b  #uModeModem,%a0@(utblUsrMode)   |; check current user mode
+    beq     1f
+    |; user mode is not uModeModem. set it to uModeModem
+    move.b  #uModeModem,%a0@(utblUsrMode)
+    debugPrintStrI " => Setting Modem Mode for user "
+    |;debugPrintHexByte %d0
+    bsr     _supvPrintHexByte
+    bra     _supvExit
+1:
+    |; user mode is uModeModem. set it to uModeTerminal
+    move.b  #uModeTerminal,%a0@(utblUsrMode)
+    debugPrintStrI " => Setting Terminal Mode for user "
+    |;debugPrintHexByte %d0
+    bsr     _supvPrintHexByte
+    bra     _supvExit
+
+
+
+|; print hex byte in d0 (wrapper for kernel macro)
+_supvPrintHexByte:
+    debugPrintHexByte %d0
     rts
+
+
 
 
 tblSupvFormat:
