@@ -25,9 +25,9 @@ module wrap030_dram_glue (
     output  wire [3:0]      memCas_n,   // dram col strobe          55/52/54/51
     output  wire [1:0]      memRas_n,   // dram row strobe              49/50
     output  wire            memWe_n,    // dram write enable            57
-    output  wire            memBufE_n   // dram buffer enable           5
+    output  wire            memBufE_n,  // dram buffer enable           5
 
-//  output  wire            timeIrq_nz, // timer interrupt  (io5)       11
+    output  reg             timeIrq_nz  // timer interrupt  (io5)       11
 // spare I/O
 //    inout   wire            oe1,        //                              84
 //    inout   wire            oe2,        //                              2
@@ -44,11 +44,13 @@ reg [6:0] refreshTimer;         // counter until time to run refresh cycle
 reg refreshCall;                // set when time to run refresh cycle
 reg refreshAck;                 // set when starting refresh cycle
 reg rOverlay;                   // startup ROM overlay
+reg [15:0] timerCount;           // timer interrupt counter
 
 // internal wires
 wire [3:0] nextState;           // state machine next state
 wire UUDn, UMDn, LMDn, LLDn;    // data bus byte select signals
 wire memCE_n;                   // bus is trying to address RAM
+wire timerCE_n;                 // bus is trying to address timer
 
 /******************************************************************************
  * bus decoding
@@ -83,6 +85,16 @@ always_comb begin
     end else memCE_n = 1;
 end
 
+always_comb begin
+    if(!busAS_n && busAddr31 && (busFC[0] ^ busFC[1]) 
+            && !busRW_n && busAddr[23:20] == 4'hf) begin
+        // this is a timer access cycle
+        timerCE_n = 0;
+    end else begin
+        timerCE_n = 1;
+    end
+end
+
 /******************************************************************************
  * primary DRAM controller state machine
  *****************************************************************************/
@@ -96,7 +108,10 @@ parameter
     sRR0    =   6,  //  Refresh RAS state 0
     sRR1    =   7,  //  Refresh RAS state 1
     sRR2    =   8,  //  Refresh RAS state 2
-    sINIT   =   9;  //  Startup initialization state
+    sINIT   =   9,  //  Startup initialization state
+    sTIME   =  10,  //  Timer initialization state
+    sTIMW   =  11,  //  Timer wait state
+    sTIMT   =  12;  //  Timer termination state
 
 always_comb begin
     case(timingState)
@@ -109,6 +124,7 @@ always_comb begin
         sIDL: begin
             if(refreshCall) nextState = sRC0;
             else if(!memCE_n) nextState = sCR0;
+            else if(!timerCE_n) nextState = sTIME;
             else nextState = sIDL;
         end
 
@@ -130,6 +146,11 @@ always_comb begin
             if(initCount > 0) nextState = sRC0;
             else nextState = sIDL;
         end
+
+        // timer update sequence
+        sTIME: nextState = sTIMW;
+        sTIMW: nextState = sTIMT;
+        sTIMT: nextState = sEND;
 
         default: nextState = sIDL;
     endcase
@@ -270,6 +291,7 @@ always @(negedge busClk, posedge busAS_n) begin
         case(timingState)
             sCC0: busDsack_nz <= 2'b00;
             sEND: busDsack_nz <= 2'b11;
+            sTIMT: busDsack_nz <= 2'b10;
             default: busDsack_nz <= 2'bZZ;
         endcase
     end
@@ -294,5 +316,33 @@ always @(negedge busClk, negedge busReset_n) begin
     end
 end
 
+/******************************************************************************
+ * Timer interrupt
+ *****************************************************************************
+ * timerCount will always count down to 0 if currently greater than 0
+ * timerCount will hold at 0 until reset
+ * timerCount uses the lowest address bits to set its value
+ * resetting timerCount will clear the pending interrupt
+ * interrupt request is asserted when timerCount is 1
+ */
+
+always @(negedge busClk, negedge busReset_n) begin
+    if(!busReset_n) timerCount <= 0;
+    else begin
+        if(timingState == sTIME) timerCount = busAddr[15:0];
+        else if(timerCount == 0) timerCount <= 0;
+        else timerCount <= timerCount - 16'h1;
+    end
+end
+
+// 68030 samples interrupt requests on falling edge
+always @(posedge busClk, negedge busReset_n) begin
+	if(!busReset_n) timeIrq_nz <= 1'b1;
+	else begin
+		if(timerCount == 16'h0001) timeIrq_nz <= 1'b0;
+		else if(nextState == sTIME) timeIrq_nz <= 1'b1;
+		else timeIrq_nz <= timeIrq_nz;
+	end
+end
 
 endmodule
