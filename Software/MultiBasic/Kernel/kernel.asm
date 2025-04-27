@@ -5,6 +5,7 @@
     .include    "kmacros.inc"
     .global     kUserTblInit
     .global     NextUser
+    .global     doSysTrapYield
     .extern     STACKINIT
 
     .section text,"ax"
@@ -17,6 +18,12 @@ WARMBOOT:
     lea     0,%a0                           |; reset VBR
     movec   %a0,%vbr                        |; 
     debugPrintStrI "\r\n~~~~ Wrap030 Multibasic ~~~~\r\n"
+
+    debugPrintStrI "\r\nClearing Timer\r\n"
+    move.b  #0,timerBase                    |; disable timer
+    move.w  #0x2700,%sr                     |; disable interrupts
+    clr.w   kPreempt                        |; clear preempted task flag
+
     |; enable CPU cache
 kEnableCache:
 .ifndef     SIMULATE
@@ -151,6 +158,7 @@ SysTrapTbl:
 
 |; task switch 
 doSysTrapYield:
+    move.b  #0,timerBase                    |; clear timer
 
 
 |; save user state to user table
@@ -254,12 +262,22 @@ RestoreUserContext:
     |;debugPrintStrI "r"
     |;debugPrintHexByte %d1
     |;debugPrintStrI ","
+    tst.w   kPreempt                        |; check if task was preempted
+    bne     .RestorePreempt                 |;
 
     cmp.b   #0,%d1                          |; if not 0 then jump to syscall table
     bne     SysTrapTbl
 
     |; if D1 was 0 we'll end up here. time to return from exception using the
     |; user PC we restored to exception frame
+    bra     .RestoreExit
+
+.RestorePreempt:
+    |; skip the SysTrap jump because process was preempted
+    clr.w   kPreempt                        |; clear the flag
+
+.RestoreExit:
+    move.b  #0,KTIMER                       |; set interval timer
     rte
 
 

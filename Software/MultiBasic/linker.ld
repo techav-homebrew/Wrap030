@@ -2,10 +2,6 @@ ramBot     = 0x00000000;
 ramTop     = 0x00ffffff;
 stackTop   = ramTop + 1;
 
-/*
-romSector0 = 0x00200000;
-romSector1 = 0x00210000;
-*/
 
 MEMORY
 {
@@ -13,13 +9,6 @@ MEMORY
     ram (rwx) : ORIGIN = 0x00080000, LENGTH = 0x01180000
 }
 
-/*
-MEMORY
-{
-    ram (rwx) : ORIGIN = 0x00000000, LENGTH = 0x00200000
-    rom (rx)  : ORIGIN = 0x00200000, LENGTH = 0x00020000
-}
-*/
 
 acia1Com = 0x80080000;
 acia1Dat = acia1Com + 4;
@@ -27,10 +16,8 @@ acia2Com = acia1Com + 8;
 acia2Dat = acia2Com + 4;
 
 overlayPort = 0x80180000;
-/*
-romBot              = 0x00200000;
-romTop              = 0x0021FFFF;
-*/
+
+timerBase = 0x80f00000;
 
 romOffset           = 0x80000000;   /* position of ROM when overlay disabled */
 romBot              = 0x00000000;
@@ -153,3 +140,5 @@ SIZEBASIC = .basicEnd - .basicStart ;
 SUPVSTACKINIT = STACKINIT - 1024 ;
 VECTORTABLE = VECTORS + romOffset ;
 RESETVECTOR = RESETENTRY + romOffset ;
+
+KTIMER = timerBase + 0x00003ffff ;
