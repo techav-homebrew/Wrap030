@@ -157,12 +157,10 @@ DRESULT disk_read (
 			return RES_PARERR;
 			break;
 		default:
-			#ifdef DEBUG
 			printStr("*DISK_READ* read error 0x");
 			printHexWord(readStatus);
 			if(retryCount) printStrLn(". Retrying.");
 			else printStrLn(". Giving up.");
-			#endif
 			break;
 		}
 	}

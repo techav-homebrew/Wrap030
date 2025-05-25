@@ -5,7 +5,7 @@
 #define WRAP030_DISK_H
 
 
-#define DISKTIMEOUT 0x0003ffff
+#define DISKTIMEOUT 0x000fffff
 #define RETRYCOUNT 10
 
 
