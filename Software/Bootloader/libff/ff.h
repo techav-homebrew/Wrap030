@@ -23,8 +23,7 @@
 #define FF_DEFINED	5380	/* Revision ID */
 
 
-// #define DEBUG 1
-// #define ENDIANSWAP 1
+//#define DEBUG 1
 
 
 #ifdef __cplusplus

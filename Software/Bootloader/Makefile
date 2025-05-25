@@ -44,6 +44,10 @@ COBJS = $(patsubst %.c,%.o,$(CSRCS))
 $(info DEBUG-OBJS $(OBJS))
 $(info DEBUG-SUBDIRS $(SUBDIRS))
 
+rebuild:
+	$(MAKE) clean
+	$(MAKE) rom.srec
+
 rom.srec: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec
 	$(OC) $(OCFLAGS) rom.out -O ihex rom.hex
