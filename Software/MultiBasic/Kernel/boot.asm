@@ -11,26 +11,103 @@
     .extern overlayPort
     .extern ramTop
     .extern romOffset
+    .extern VECTORTABLE
+    .extern romOffset
+    .extern romTop
 
     .equ        aciaSet, 0x15               |; 8N1,÷16 (38400),no interrupts
 
 |; cold boot entry
 COLDBOOT:
     lea         SUPVSTACKINIT,%sp           |; set initial supervisor stack pointer
-    lea         ramBot,%a0                  |; get pointer to address 0
-    move.l      #0x55aa55aa,%d0             |; get a test pattern
-    move.l      %d0,%a0@                    |; try to write the test pattern
-    cmp.l       %a0@,%d0                    |; read back and check for pattern match
-    beq         _doWarm                     |; if pattern matches then skip to warm boot
 
 |; initialize the kernal console acia
 _initKernelConsole:
     move.b      #3,acia1Com                 |; reset ACIA 1
     move.b      #aciaSet,acia1Com           |; configure ACIA 1
-    debugPrintStrI  "\r\n\r\nWrap030 Cold Boot ...\r\n"
+    debugPrintStrInoram  "\r\n\r\n                                ____  _____  ____ "
+    debugPrintStrInoram  "\r\n _      __ _____ ____ _ ____   / __ \\|__  / / __ \\"
+    debugPrintStrInoram  "\r\n| | /| / // ___// __ `// __ \\ / / / / /_ < / / / /"
+    debugPrintStrInoram  "\r\n| |/ |/ // /   / /_/ // /_/ // /_/ /___/ // /_/ / "
+    debugPrintStrInoram  "\r\n|__/|__//_/    \\__,_// .___/ \\____//____/ \\____/  "
+    debugPrintStrInoram  "\r\n------------------- /_/ --------------------------\r\n\r\n"
+
+    .even
+
+    lea         %pc@(COLDBOOT),%a3
+    debugPrintStrInoram  "Starting vector 0x"
+    move.l      %a3,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram "\r\n"
+
+    debugPrintStrInoram "Setting vector base register to 0x"
+    lea         VECTORTABLE,%a5
+    move.l      %a5,%d0
+    debugPrintHexLongNoRam
+    movec       %a5,%vbr
+    debugPrintStrInoram " ... OK\r\n"
+
+_clearOverlay:
+    debugPrintStrInoram "Disabling overlay ... "
+    move.b      #0,overlayPort              |; disable startup overlay
+    debugPrintStrInoram "OK\r\n"
+
+_memTest1:
+    debugPrintStrInoram "Writing pattern 0x55AA55AA to start of RAM"
+    move.l      #0x55aa55aa,%d3             |; get pattern
+    move.l      %d3,ramBot                  |; write to bottom of RAM
+    debugPrintStrInoram " ... "
+    move.l      ramBot,%d4                  |; read pattern
+    debugPrintStrInoram "Read: 0x"
+    move.l      %d4,%d0
+    debugPrintHexLongNoRam
+    cmp.l       %d4,%d3
+    beq         1f
+    debugPrintStrInoram ". FAIL\r\n"
+    bra         _memTest2
+1:
+    debugPrintStrInoram ". PASS\r\n"
+
+_memTest2:
+    debugPrintStrInoram "Writing sequential bytes 0x55AA1188"
+    lea         ramBot,%a0                  |; get memory pointer
+    move.l      %a0,%a1
+    move.l      #0x55aa1188,%d7             |; get test pattern
+    
+    rol.l       #8,%d7                      |; rotate first byte into position
+    move.b      %d7,%a0@+                   |; write first pattern byte
+    rol.l       #8,%d7                      |;
+    move.b      %d7,%a0@+                   |;
+    rol.l       #8,%d7                      |;
+    move.b      %d7,%a0@+                   |;
+    rol.l       #8,%d7                      |;
+    move.b      %d7,%a0@+                   |;
+
+    debugPrintStrInoram " ... "
+    move.l      %a1@,%d6                    |; read back pattern
+    debugPrintStrInoram "Read: 0x"
+    move.l      %d6,%d0                     |; copy
+    debugPrintHexLongNoRam
+    cmp.l       %d7,%d6                     |; check if patterns match
+    beq         1f
+    debugPrintStrInoram ". FAIL\r\n"
+    bra         _memTest3
+1:
+    debugPrintStrInoram ". PASS\r\n"
+
+_memTest3:
+    
+|;    debugPrintHexLong %d0
+
+
+|;    lea         ramBot,%a0                  |; get pointer to address 0
+|;    move.l      #0x55aa55aa,%d0             |; get a test pattern
+|;    move.l      %d0,%a0@                    |; try to write the test pattern
+|;    cmp.l       %a0@,%d0                    |; read back and check for pattern match
+|;    beq         _doWarm                     |; if pattern matches then skip to warm boot
 
 _clearMainMem:
-    debugPrintStrI  "Initializing Main Memory ... "
+    debugPrintStrInoram  "Initializing Main Memory ... "
     lea         ramTop+1,%a0                |; get pointer to top of memory space
     lea         ramBot,%a1                  |; get pointer to bottom of memory space
     eor.l       %d0,%d0                     |; get 0 in a data register
@@ -38,11 +115,84 @@ _clearMainMem:
     move.l      %d0,%a0@-                   |; clear next longword of memory
     cmpa.l      %a0,%a1                     |; check if we're at the bottom of memory
     bne         1b                          |; loop until we are
-    debugPrintStrI  "OK\r\n"
+    debugPrintStrInoram  "OK\r\n"
 
+|; copy ROM into RAM
+_shadowROM:
+    debugPrintStrInoram "Loading from 0x"
+    lea         romBot,%a2                  |; get pointer to start of ROM
+    lea         %a2@(romOffset),%a2
+    move.l      %a2,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram " to 0x"
+    lea         ramBot,%a3                  |; get pointer to start of RAM
+    move.l      %a3,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram " ... "
+
+    lea         romBot,%a2                  |; get pointer to start of ROM
+    lea         %a2@(romOffset),%a2
+    lea         ramBot,%a3                  |; get pointer to start of RAM
+
+    move.l      #romTop,%d0                 |; get size of ROM in bytes
+    lsr.l       #2,%d0                      |; shift to size in longwords
+1:
+    move.l      %a2@+,%a3@+                 |; copy a longword
+    subq.l      #1,%d0                      |; decrement longword counter
+    bne         1b                          |; loop until copy complete
+    debugPrintStrInoram "OK\r\n"
+
+_verifyShadow:
+    debugPrintStrInoram "Verifying ... "
+    lea         romBot,%a2                  |; get pointer to start of ROM
+    lea         %a2@(romOffset),%a2         |;
+    lea         ramBot,%a3                  |; get pointer to start of RAM
+    move.l      #romTop,%d0                 |; get size of ROM in bytes
+    lsr.l       #2,%d0                      |; shift to size in longwords
+1:
+    move.l      %a2@+,%d2                   |; read longword from ROM
+    move.l      %a3@+,%d3                   |; read longword from RAM
+    cmp.l       %d2,%d3                     |; make sure they match
+    bne         2f                          |; branch on error
+    subq.l      #1,%d0                      |; decrement counter
+    bne         1b                          |; loop until verify complete
+    bra         _verifyDone                 |; if we made it here we're good
+2:  |; handle verify error
+    debugPrintStrInoram "ERROR at 0x"
+    move.l      %a3,%d0                     |; get RAM pointer
+    subq.l      #4,%d0                      |; decrement to failed address
+    debugPrintHexLongNoRam                  |; print failed address
+    debugPrintStrInoram ":\r\n    Expected: 0x"
+    move.l      %d2,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram "; Read: 0x"
+    move.l      %d3,%d0
+    debugPrintHexLongNoRam
+    debugPrintStrInoram ". Resetting....."
+    jmp         COLDBOOT
+
+_verifyDone:
+    debugPrintStrInoram "OK\r\nStarting Kernel ... \r\n"
+    jmp         WARMBOOT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 |; copy contents of ROM into RAM above highest ROM address
 _shadowROMp1:
-    debugPrintStrI "Loading ... "
+    debugPrintStrInoram "Loading ... "
     move.l      #romTop,%d0                 |; get highest valid ROM address
     addq.l      #1,%d0                      |; get total size of ROM in bytes
     move.l      %d0,%d1                     |; save a copy for later
@@ -56,11 +206,11 @@ _shadowROMp1:
     move.l      %a0@+,%a1@+                 |; copy next longword
     cmp.l       %d0,%a0                     |; check if top of ROM
     blt.s       1b                          |; loop until all of ROM copied to RAM
-    debugPrintStrI "OK\r\n"
+    debugPrintStrInoram "OK\r\n"
 
 |; verify copy was successful
 _shadowROMp2:
-    debugPrintStrI "Verifying ... "
+    debugPrintStrInoram "Verifying ... "
     move.l      %a5,%a0                     |; get source pointer
     move.l      %a6,%a1                     |; get destination pointer
 1:
@@ -70,9 +220,9 @@ _shadowROMp2:
     bne         2f                          |; branch on error
     cmp.l       %d0,%a0                     |; loop until all of shadow verified
     blt.s       1b
-    debugPrintStrI "OK\r\n"
+    debugPrintStrInoram "OK\r\n"
 
-    debugPrintStrI "Jumping to RAM ... "
+    debugPrintStrInoram "Jumping to RAM ... "
     lea         %pc@(_shadowROMp3),%a3      |; get address for next function
     add.l       %d1,%a3                     |; add the offset to it
     move.l      %a3,%d0
@@ -80,34 +230,34 @@ _shadowROMp2:
     jmp         %a3@                        |; jump to the offset address
 
 2:  |; verify error
-    debugPrintStrI "ERROR: "
+    debugPrintStrInoram "ERROR: "
     move.l      %a0,%d0                     |; print source address
     debugPrintHexLong %d0
-    debugPrintStrI ":"
+    debugPrintStrInoram ":"
     move.l      %d2,%d0                     |; print source longword
     debugPrintHexLong %d0
-    debugPrintStrI " => "
+    debugPrintStrInoram " => "
     move.l      %a1,%d0                     |; print destination address
     debugPrintHexLong %d0
-    debugPrintStrI ":"
+    debugPrintStrInoram ":"
     move.l      %d3,%d0                     |; print destination longword
     debugPrintHexLong %d0
-    debugPrintStrI "\r\n\r\n"
+    debugPrintStrInoram "\r\n\r\n"
     jmp COLDBOOT
 
 _shadowROMp3:
-    debugPrintStrI "OK\r\n"
+    debugPrintStrInoram "OK\r\n"
 
 |; disable the startup overlay. Since we just copied ROM to the same addresses in RAM
 |; this should not disrupt execution.
-_clearOverlay:
-    debugPrintStrI "Disabling overlay ... "
-    move.b      #0,overlayPort              |; disable startup overlay
-    debugPrintStrI "OK\r\n"
+|;_clearOverlay:
+|;    debugPrintStrInoram "Disabling overlay ... "
+|;    move.b      #0,overlayPort              |; disable startup overlay
+|;    debugPrintStrInoram "OK\r\n"
 
 |; copy contents of ROM to base of RAM
 _shadowROMp4:
-    debugPrintStrI "Shadowing ROM ... "
+    debugPrintStrInoram "Shadowing ROM ... "
     lea         romOffset,%a0               |; get source pointer
     lea         ramBot,%a1                  |; get destination pointer
     move.l      #romTop,%d0                 |; get size of ROM less 1
@@ -121,11 +271,11 @@ _shadowROMp4:
     move.l      %a0@+,%a1@+                 |; copy ROM to RAM
     subq.l      #1,%d0                      |; decrement count
     bne.s       1b                          |; branch until count 0
-    debugPrintStrI "OK\r\n"
+    debugPrintStrInoram "OK\r\n"
 
 |; verify shadow
 _shadowROMp5:
-    debugPrintStrI "Verifying ROM shadow ... "
+    debugPrintStrInoram "Verifying ROM shadow ... "
     subq.l      #1,%d1
 1:
     move.l      %a5@+,%d2                   |; get source byte
@@ -134,40 +284,40 @@ _shadowROMp5:
     bne.s       2f                          |; branch on error
     subq.l      #1,%d1                      |; decrement counter
     bne.s       1b                          |; loop until all verified
-    debugPrintStrI "OK\r\n"
+    debugPrintStrInoram "OK\r\n"
 
-    debugPrintStrI "Starting Kernel ... \r\n"
+    debugPrintStrInoram "Starting Kernel ... \r\n"
     jmp         WARMBOOT
 
 2:  |; verify error
-    debugPrintStrI "ERROR: "
+    debugPrintStrInoram "ERROR: "
     move.l      %a5,%d0                     |; print source address
     debugPrintHexLong %d0
-    debugPrintStrI ":"
+    debugPrintStrInoram ":"
     move.l      %d2,%d0                     |; print source longword
     debugPrintHexLong %d0
-    debugPrintStrI " => "
+    debugPrintStrInoram " => "
     move.l      %a6,%d0                     |; print destination address
     debugPrintHexLong %d0
-    debugPrintStrI ":"
+    debugPrintStrInoram ":"
     move.l      %d3,%d0                     |; print destination longword
     debugPrintHexLong %d0
-    debugPrintStrI "\r\n\r\n"
+    debugPrintStrInoram "\r\n\r\n"
     jmp COLDBOOT
 
-
+*/
 
 
 /*
 _copyVectors:
-    debugPrintStrI  "Initializing Vectors ... "
+    debugPrintStrInoram  "Initializing Vectors ... "
     lea         romBot,%a1                  |; get pointer to bottom of ROM
     lea         ramBot,%a0                  |; get pointer to bottom of RAM
     move.l      #256,%d0                    |; prepare to copy 256 vectors
 1:
     move.l      %a1@+,%a0@+                 |; copy vector
     dbra        %d0,1b                      |; copy all vectors
-    debugPrintStrI  "OK\r\n"
+    debugPrintStrInoram  "OK\r\n"
     jmp         WARMBOOT
 */
 
@@ -178,6 +328,6 @@ _copyVectors:
 |; on cold boot this is redundant, but won't hurt anything
 _doWarm:
     move.l      romBot,ramBot               |; copy vector 0
-    debugPrintStrI  "\r\nWrap030 Warm Boot ... \r\n"
+    debugPrintStrInoram  "\r\nWrap030 Warm Boot ... \r\n"
     jmp         WARMBOOT
 

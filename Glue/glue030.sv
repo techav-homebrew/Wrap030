@@ -33,6 +33,7 @@ module wrap030 (
 
 wire [1:0]  nIntDsack;
 wire        nIntBerr;
+wire        nIntAvec;
 
 assign nIntDsack[0] = nMemDsack[0] & nAciaDsack[0];
 assign nIntDsack[1] = nMemDsack[1] & nAciaDsack[1];
@@ -51,11 +52,13 @@ always_comb begin
     if(!nIntBerr) znBerr <= 0;
     else znBerr <= 1'bZ;
 
-    if(!nMemSterm) znSTERM <= 0;
-    else znSTERM <= 1'bZ;
+    znSTERM <= 1'bZ;
 
-    if(!nAciaAciaCE) znCiin <= 0;
+    if(!nAS && (cpuFC[0] ^ cpuFC[1]) && addr31) znCiin <= 0;
     else znCiin <= 1'bZ;
+
+    if(!nIntAvec) znAvec <= 0;
+    else znAvec <= 1'bZ;
 end
 
 wire [1:0]  nMemDsack;
@@ -71,6 +74,7 @@ memcycle mainmem(
     .addrSel(addrSel),
     .addrSiz(addrSiz),
     .siz(siz),
+    .cpuFC(cpuFC),
     // outputs
     .nRomCE(nRomCE),
     .nDsack(nMemDsack),
@@ -78,7 +82,8 @@ memcycle mainmem(
     .nMemRd(nMemRd),
     .nMemWr(nMemWr),
     .nRamCE(nRamCE),
-    .nBerr(nMemBerr)
+    .nBerr(nMemBerr),
+    .nAvec(nIntAvec)
 );
 
 wire [1:0]  nAciaDsack;
@@ -90,6 +95,7 @@ aciacycle maincom (
     .nReset(nReset),
     .nAS(nAS),
     .addr31(addr31),
+    .cpuFC(cpuFC),
     .addrSel(addrSel),
     // outputs
     .nDsack(nAciaDsack),

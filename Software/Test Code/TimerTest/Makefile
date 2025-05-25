@@ -31,7 +31,7 @@ RM = rm -rf
 CP = cp -f
 endif
 
-EXCLUDE := linker.ld/. Makefile/. rom.bin/. rom.hex/. rom.map/. rom.out/. rom.srec/.
+EXCLUDE := linker.ld/. Makefile/. BOOT.BIN/. rom.hex/. rom.map/. rom.out/. rom.srec/. boot.srec/.
 SUBDIRS := $(filter-out $(EXCLUDE),$(wildcard */.))
 
 SRCS = $(wildcard */*.asm)
@@ -45,7 +45,7 @@ $(info DEBUG-SUBDIRS $(SUBDIRS))
 
 boot.bin: rom.out
 	$(OC) $(OCFLAGS) rom.out -O binary BOOT.BIN
-	$(OC) $(OCFLAGS) rom.out -O srec multibasic.srec
+	$(OC) $(OCFLAGS) rom.out -O srec boot.srec
 
 rom.srec: rom.out
 	$(OC) $(OCFLAGS) rom.out -O srec rom.srec

@@ -2,13 +2,15 @@ ramBot     = 0x00000000;
 ramTop     = 0x00ffffff;
 stackTop   = ramTop + 1;
 
+/*
+romSector0 = 0x00200000;
+romSector1 = 0x00210000;
+*/
 
 MEMORY
 {
-    rom (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00080000
-    ram (rwx) : ORIGIN = 0x00080000, LENGTH = 0x01180000
+    ram (rwx) : ORIGIN = 0x00000000, LENGTH = 0x00100000
 }
-
 
 acia1Com = 0x80080000;
 acia1Dat = acia1Com + 4;
@@ -16,14 +18,18 @@ acia2Com = acia1Com + 8;
 acia2Dat = acia2Com + 4;
 
 overlayPort = 0x80180000;
-
-timerBase = 0x80f00000;
+/*
+romBot              = 0x00200000;
+romTop              = 0x0021FFFF;
+*/
 
 romOffset           = 0x80000000;   /* position of ROM when overlay disabled */
 romBot              = 0x00000000;
 romTop              = 0x0001FFFF;
 romSector0          = romBot;
 romSector1          = romBot + 0x00010000;
+
+timerBase           = 0x80f00000;
 
 ideBase             = 0x80200000;
 ideCommand          = ideBase + 0x0000;
@@ -75,70 +81,16 @@ uMemSize5   = uMemSize;
 uMemSize6   = uMemSize;
 uMemSize7   = uMemSize;
 
-ENTRY(COLDBOOT)
+ENTRY(WARMBOOT)
 SECTIONS{
     .vectors 0x00000000 :
     {
         VECTORS = .;
-        Kernel/vectors.o (text)
+        TimerTest/vectors.o (text)
         . = ALIGN(4);
-    } > rom = 0xff
-    .kernel 0x00001000 :
-    {
-        RESETENTRY = .;
-        Kernel/boot.o (text)
-        . = ALIGN(4);
-        Kernel/kernel.o (text)
-        . = ALIGN(4);
-
-        ROMBASIC = . ;
-        RAMBASIC = . ;
-        .basicStart = . ;
-        EhBASIC/ehbasic.o (text)
-        .basicEnd = . ;
-    } > rom = 0xff
-    .kglobals 0x00080000 (NOLOAD) :
-    {
-        Kernel/vectors.o ( bss )
-        Kernel/boot.o ( bss )
-        Kernel/kernel.o ( bss )
-    } > ram
-    .kusertable 0x00090000 (NOLOAD) :
-    {
-        USERTABLE = . ;
-    } > ram
-    .kmmutable 0x000A0000 (NOLOAD) :
-    {
-        MMUTABLE = . ;
-    } > ram
-
-    .usermem 0x00100000 (NOLOAD) :
-    {
-        STACKINIT = . ;
-        uMemStart = . ;
-        
-        uMemStart0 = . ;
-        . += uMemSize0;
-        uMemStart1 = . ;
-        . += uMemSize1;
-        uMemStart2 = . ;
-        . += uMemSize2;
-        uMemStart3 = . ;
-        . += uMemSize3;
-        uMemStart4 = . ;
-        . += uMemSize4;
-        uMemStart5 = . ;
-        . += uMemSize5;
-        uMemStart6 = . ;
-        . += uMemSize6;
-        uMemStart7 = . ;
-        . += uMemSize7;
+        TimerTest/TimerTest.o (text)
+        . = ALIGN(4096);
+        TimerTest/*.o (bss)
     } > ram
 }
 
-SIZEBASIC = .basicEnd - .basicStart ;
-SUPVSTACKINIT = STACKINIT - 1024 ;
-VECTORTABLE = VECTORS + romOffset ;
-RESETVECTOR = RESETENTRY + romOffset ;
-
-KTIMER = timerBase + 0x00003ffff ;

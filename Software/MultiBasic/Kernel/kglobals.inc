@@ -7,6 +7,7 @@ MAXUSERS = 8
     .global SaveUserContext
     .global NextUser
     .global RestoreUserContext
+    .global kPreempt
 
     .extern SysTrapRAM
 
@@ -73,8 +74,12 @@ utblRegCCR: .space  4                       |; user status register
 utblRegPC:  .space  4                       |; user program counter
 utblMemPtr: .space  4                       |; user main memory pointer
 utblMemLen: .space  4                       |; user main memory size
-utblUndefined:  .space  40                  |; pad table to 32 longwords
+utblUsrMode: .space 1                       |; user mode [0: terminal | 1: modem]
+utblUndefined:  .space  39                  |; pad table to 32 longwords
 utbl_size = . - utbl                        |; size of this table
+
+    .equ    uModeTerminal,  0
+    .equ    uModeModem,     1
 
 
 |; kernel global variables
@@ -83,4 +88,4 @@ utbl_size = . - utbl                        |; size of this table
 |; USERTABLE:  ds.b utbl_size*MAXUSERS         |; reserve space for the user table
 
 USERNUM:    ds.l 1                          |; current user number
-
+kPreempt:   ds.w 1                          |; set to -1 if task was preempted by timer

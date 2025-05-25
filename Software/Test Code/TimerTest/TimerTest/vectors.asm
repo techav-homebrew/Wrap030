@@ -4,79 +4,13 @@
     |;.include    "kmacros.inc"
     .extern STACKINIT
     .extern RESETVECTOR
-    .extern USERTABLE
-    .extern USERNUM
-    .extern kUserTblInit
-    .extern NextUser
-
+    .extern WARMBOOT
+    .extern timerFlag
 
 vector:
     bra.w   WARMBOOT
-    dc.l    RESETVECTOR
-    dc.l    printException                  |;  2   bus error
-    dc.l    printException                  |;  3   address error
-    dc.l    printException                  |;  4   illegal instruction
-    dc.l    printException                  |;  5   zero divide
-    dc.l    printException                  |;  6   CHK/CHK2 instruction
-    dc.l    printException                  |;  7   cpTRAPcc/TRAPcc/TRAPV
-    dc.l    printException                  |;  8   privilege violation
-    dc.l    printException                  |;  9   trace
-    dc.l    printException                  |;  10  a-trap
-    dc.l    printException                  |;  11  f-trap
-    dc.l    printException                  |;  12  reserved
-    dc.l    printException                  |;  13  copro protocol violation
-    dc.l    printException                  |;  14  format error
-    dc.l    printException                  |;  15  uninitialized interrupt
-    dc.l    printException                  |;  16  reserved
-    dc.l    printException                  |;  17  reserved
-    dc.l    printException                  |;  18  reserved
-    dc.l    printException                  |;  19  reserved
-    dc.l    printException                  |;  20  reserved
-    dc.l    printException                  |;  21  reserved
-    dc.l    printException                  |;  22  reserved
-    dc.l    printException                  |;  23  reserved
-    dc.l    printException                  |;  24  spurious interrupt
-    dc.l    printException                  |;  25  irq 1
-    dc.l    printException                  |;  26  irq 2
-    dc.l    printException                  |;  27  irq 3
-    dc.l    SysPreempt                      |;  28  irq 4
-    dc.l    printException                  |;  29  irq 5
-    dc.l    printException                  |;  30  irq 6
-    dc.l    printException                  |;  31  irq 7 (nmi)
-    dc.l    SysTrap                         |;  32  trap 0
-    dc.l    printException                  |;  33  trap 1
-    dc.l    printException                  |;  34  trap 2
-    dc.l    printException                  |;  35  trap 3
-    dc.l    printException                  |;  36  trap 4
-    dc.l    printException                  |;  37  trap 5
-    dc.l    printException                  |;  38  trap 6
-    dc.l    printException                  |;  39  trap 7
-    dc.l    printException                  |;  40  trap 8
-    dc.l    printException                  |;  41  trap 9
-    dc.l    printException                  |;  42  trap 10
-    dc.l    printException                  |;  43  trap 11
-    dc.l    printException                  |;  44  trap 12
-    dc.l    printException                  |;  45  trap 13
-    dc.l    printException                  |;  46  trap 14
-    dc.l    printException                  |;  47  trap 15
-    dc.l    printException                  |;  48  fpcp branch unordered
-    dc.l    printException                  |;  49  fpcp inexact result
-    dc.l    printException                  |;  50  fpcp divide by zero
-    dc.l    printException                  |;  51  fpcp underflow
-    dc.l    printException                  |;  52  fpcp operand error
-    dc.l    printException                  |;  53  fpcp overflow
-    dc.l    printException                  |;  54  fpcp signaling NaN
-    dc.l    printException                  |;  55  reserved
-    dc.l    printException                  |;  56  mmu config error
-    dc.l    printException                  |;  57  reserved 68851
-    dc.l    printException                  |;  58  reserved 68851
-    dc.l    printException                  |;  59  reserved
-    dc.l    printException                  |;  60  reserved
-    dc.l    printException                  |;  61  reserved
-    dc.l    printException                  |;  62  reserved
-    dc.l    printException                  |;  63  reserved
-    .dcb.l  64,printException               |;  64-127 user
-    .dcb.l  128,printException              |;  128-255 user
+    dc.l    WARMBOOT
+    .dcb.l  254,printException
 
     .include    "kmacros.inc"
 
@@ -119,6 +53,7 @@ exceptPrintLong:
 
 
 printException:
+    move.w  #0x2700,%sr                     |; disable interrupts (not needed?)
     link    %a6,#-8                         |; space for local vars
     move.l  %d0,%a6@(-4)                    |; save working registers
     move.l  %a0,%a6@(-8)                    |;
@@ -129,10 +64,6 @@ printException:
     andi.w  #0x0fff,%d0                     |; mask off format bits
     movea.l %pc@(vectorNameTable,%d0:w:1),%a0 |; get pointer to exception name
     bsr     exceptPrintStr                  |; print exception name
-
-    exceptPrintStrS strUser                 |; print current user number
-    move.w  USERNUM,%d0                     |;
-    bsr     exceptPrintWord                 |;
 
     exceptPrintStrS strRegPC                |; print PC
     move.l  %a6@(6),%d0                     |;
@@ -241,6 +172,10 @@ printException:
 
 
     move.w  %a6@(10),%d0                    |; get frame format
+    move.w  %d0,%d1                         |; duplicate
+    andi.w  #0x0fff,%d1                     |; get vector number
+    cmpi.w  #0x070,%d1                      |; is this IRQ 4?
+    beq.s   exceptTimer                     |; make the timer shut up
     rol.w   #4,%d0                          |; move into position
     andi.w  #0x0f,%d0                       |; mask out vector offset
     cmpi.w  #0x0a,%d0                       |; check if fault frame 
@@ -253,6 +188,7 @@ exceptPrintEnd:
     move.l  %a6@(-8),%a0                    |; restore registers
     move.l  %a6@(-4),%d0                    |;
     unlk    %a6                             |; unlink stack frame
+    move.w  #0x2000,%sr                     |; enable interrupts (not needed?)
     rte                                     |; return from exception
 
 exceptTrap:
@@ -267,17 +203,14 @@ exceptFault:
     bsr     exceptPrintLong                 |;
     andi.w  #0xCEFF,%a6@(14)                |; clear retry bits
 
-    lea     USERTABLE,%a0                   |; get pointer to user table
-    move.l  USERNUM,%d0                     |; get current user number
-    jsr     kUserTblInit                    |; reinitialize current user
-
-    lea     NextUser,%a0                    |; update return address to switch
-    move.l  %a0,%a6@(6)                     |;  to next user on rte
     bra     exceptPrintEnd                  |; done
 
-SysPreempt:
-    move.w  #-1,kPreempt                    |; set preempt flag
-    bra     doSysTrapYield
+exceptTimer:
+    exceptPrintStrS strTimer                |;
+    move.l  #-1,timerFlag                   |; set flag
+    move.b  #0,timerBase                    |; disable timer
+    bra     exceptPrintEnd                  |; done
+
 
 
 |; table of pointers to friendly name strings for all vectors
@@ -365,6 +298,7 @@ strPCTrac1: .ascii  "\r\n    0x\0"
 strFault:   .ascii  "\r\n  Fault Address: 0x\0"
 strInstr:   .ascii  "\r\n  Instruction Pointer: 0x\0"
 strFoot:    .ascii  "\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n\r\n> \0"
+strTimer:   .ascii  "\r\n  Disabling Timer\0"
 
 |; table of friendly name strings for all vectors
 vectorNames:
