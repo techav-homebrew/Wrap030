@@ -65,7 +65,7 @@ ioCom5      = ioComBase + 0x0000 + 0x28;
 ioCom6      = ioComBase + 0x0000 + 0x30;
 ioCom7      = ioComBase + 0x0000 + 0x38;
 
-uMemSize    = 128 * 1024;
+uMemSize    = 1 * 1024 * 1024;
 uMemSize0   = uMemSize;
 uMemSize1   = uMemSize;
 uMemSize2   = uMemSize;
@@ -112,7 +112,7 @@ SECTIONS{
         MMUTABLE = . ;
     } > ram
 
-    .usermem 0x00100000 (NOLOAD) :
+    .usermem 0x00800000 (NOLOAD) :
     {
         STACKINIT = . ;
         uMemStart = . ;

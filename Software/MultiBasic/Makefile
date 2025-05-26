@@ -31,7 +31,7 @@ RM = rm -rf
 CP = cp -f
 endif
 
-EXCLUDE := linker.ld/. Makefile/. rom.bin/. rom.hex/. rom.map/. rom.out/. rom.srec/.
+EXCLUDE := linker.ld/. Makefile/. rom.bin/. rom.hex/. rom.map/. rom.out/. rom.srec/. BOOT.BIN/. multibasic.srec/.
 SUBDIRS := $(filter-out $(EXCLUDE),$(wildcard */.))
 
 SRCS = $(wildcard */*.asm)

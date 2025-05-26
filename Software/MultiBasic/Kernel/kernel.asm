@@ -224,9 +224,15 @@ NextUser:
     andi.b  #0x22,%d1                       |; mask off DSR bits
     cmpi.b  #0x22,%d1                       |; check for start of new call
     bne.s   RestoreUserContext              |; no new call, go restore user
-    bsr     kUserTblInit                    |; new call started, re-init user
-    |; on return, fall through to RestoreUserContext
-    
+    |; re-initialize the user on start of new call, but don't immediately
+    |; restore that user; wait until the user loop has completed and wrapped 
+    |; wrapped around to this user
+    pea     NextUser                        |; push NexUser as return address
+    bra     kUserTblInit                    |; call user table init subroutine
+    |; not reached
+    nop
+
+
 |; restore context for user in D0
 RestoreUserContext:
     |;debugPrintStrI  "R"

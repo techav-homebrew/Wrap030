@@ -7,14 +7,7 @@
  * [0][0][1][ fmt][  user ] - set user size/parity
  * [0][0][0][1][s][  user ] - set user stop bits
  * [0][0][0][0][1][  user ] - reset user
- * [0][0][0][0][0][1][1][1] - 
- * [0][0][0][0][0][1][1][0] - 
- * [0][0][0][0][0][1][0][1] - 
- * [0][0][0][0][0][1][0][0] - 
- * [0][0][0][0][0][0][1][1] - 
- * [0][0][0][0][0][0][1][0] - 
- * [0][0][0][0][0][0][0][1] - warm start
- * [0][0][0][0][0][0][0][0] - cold start
+ * [0][0][0][0][0][  user ] - toggle modem mode
  */
 
 supvConsole:
@@ -171,7 +164,7 @@ _supvSetBaud:
 _supvUserMode:
     andi.b  #0x07,%d1                       |; mask user number
     extb.l  %d1                             |; sign-extend to longword
-    move.l  %d0,%d1                         |; copy user number
+    move.l  %d1,%d0                         |; copy user number
 
     mulu    #utbl_size,%d1                  |; get table offset
     lea     USERTABLE,%a0                   |; get pointer to user table
@@ -180,7 +173,18 @@ _supvUserMode:
     beq     1f
     |; user mode is not uModeModem. set it to uModeModem
     move.b  #uModeModem,%a0@(utblUsrMode)
-    debugPrintStrI " => Setting Modem Mode for user "
+
+    |; send modem configuration string
+    move.l  %a0@(utblConOut),%a0            |; get pointer to user com port
+    lea     %pc@(strSupvModemAT),%a1        |; get pointer to command string
+2:  move.b  %a1@+,%d1                       |; get next string byte
+    beq.s   3f                              |; exit loop if byte is null
+4:  btst    #5,%a0@(comRegLSR)              |; check TX ready bit
+    beq.s   4b                              |; loop until TX ready
+    move.b  %d1,%a0@(comRegTX)              |; print byte
+    bra.s   2b                              |; loop until string printed
+
+3:  debugPrintStrI " => Setting Modem Mode for user "
     |;debugPrintHexByte %d0
     bsr     _supvPrintHexByte
     bra     _supvExit
@@ -191,6 +195,9 @@ _supvUserMode:
     |;debugPrintHexByte %d0
     bsr     _supvPrintHexByte
     bra     _supvExit
+
+
+
 
 
 
@@ -247,5 +254,7 @@ strSupvBaud4:   .ascii  " => Setting 4800 baud for user \0"
 strSupvBaud5:   .ascii  " => Setting 9600 baud for user \0"
 strSupvBaud6:   .ascii  " => Setting 38400 baud for user \0"
 strSupvBaud7:   .ascii  " => Setting 115200 baud for user \0"
+
+strSupvModemAT: .ascii  "ATE0\rATV0\rAT&D0\rAT&S1\rATS0=1\r\0"
 
     .even
