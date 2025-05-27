@@ -50,6 +50,7 @@ kInitConsoles:
     move.b  #0x06,%a1@(comRegFCR)           |; disable FIFO
     move.b  #0x03,%a1@(comRegLCR)           |; set 8N1
     move.b  #0x00,%a1@(comRegIER)           |; disable interrupts
+    move.b  #0x03,%a1@(comRegMCR)           |; assert DTR/RTS
     move.b  #0x83,%a1@(comRegLCR)           |; enable divisor registers
     move.b  #0x0C,%a1@(comRegDivLo)         |; set divisor for 9600bps from 1.8432MHz oscillator
     move.b  #0x00,%a1@(comRegDivHi)         |;
