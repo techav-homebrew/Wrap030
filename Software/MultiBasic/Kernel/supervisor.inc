@@ -255,6 +255,6 @@ strSupvBaud5:   .ascii  " => Setting 9600 baud for user \0"
 strSupvBaud6:   .ascii  " => Setting 38400 baud for user \0"
 strSupvBaud7:   .ascii  " => Setting 115200 baud for user \0"
 
-strSupvModemAT: .ascii  "ATE0\rATV0\rAT&D0\rAT&S1\rATS0=1\r\0"
+strSupvModemAT: .ascii  "ATE0\rATV0\rATQ0\rAT&D0\rAT&S1\rATS0=1\r\0"
 
     .even
