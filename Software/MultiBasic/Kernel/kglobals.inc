@@ -74,8 +74,9 @@ utblRegCCR: .space  4                       |; user status register
 utblRegPC:  .space  4                       |; user program counter
 utblMemPtr: .space  4                       |; user main memory pointer
 utblMemLen: .space  4                       |; user main memory size
+utblMmuRoot: .space 4
 utblUsrMode: .space 1                       |; user mode [0: terminal | 1: modem]
-utblUndefined:  .space  39                  |; pad table to 32 longwords
+utblUndefined:  .space  35                  |; pad table to 32 longwords
 utbl_size = . - utbl                        |; size of this table
 
     .equ    uModeTerminal,  0
@@ -89,3 +90,5 @@ utbl_size = . - utbl                        |; size of this table
 
 USERNUM:    ds.l 1                          |; current user number
 kPreempt:   ds.w 1                          |; set to -1 if task was preempted by timer
+
+kScratchMMU:    ds.l 2                      |; 64-bit scratch memory for MMU registers
