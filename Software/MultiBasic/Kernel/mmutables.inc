@@ -31,88 +31,97 @@ initSupvMMU:
     dbra    %d0,1b                          |; loop until done
     rts
 
-|; void initUserMMU(reg int user)           D0
-|;  int ramSize;                            SP@(0)
-|;  void * tptr;                            A0
-|;  int uRamPages;                          SP@(4)
-|;  int pagesize;                           D1
-|;  struct utbl * userTable                 A1
+
+|; void initUserMMU(int user)
+|;  (parameter passed via stack)
+|;  Register utilization:
+|;      A0: tbl*
+|;      A1: USERTABLE[user]
+|;      D2: uMem
+|;      D3: uMemPages
+|;      D4: tblEnd
 initUserMMU:
-    link    %a6,#-8                         |; set up stack frame
+    |; int tableSize = ((ramTop + 1 - ramBot) / pageSize) >> 2;
+    move.l  #ramTop,%d0                     |;
+    addq.l  #1,%d0                          |;
+    sub.l   #ramBot,%d0                     |;
+    divu.l  #PAGESIZE,%d0                   |;
+    lsl.l   #2,%d0                          |; D0 = tableSize
     
-    |; calculate total ram size
-    move.l  #ramTop,%d2                     |;
-    addq.l  #1,%d2                          |;
-    sub.l   #ramBot,%d2                     |;
-|;    move.l  %d2,%sp@(0)                     |;
+    |; int * tbl = (int*)(MMUTABLEU + (user * tableSize));
+    move.l  %sp@(4),%d1                     |; D1 = user
+    mulu    %d0,%d1                         |; D1 = user * tableSize
+    lea     @(MMUTABLEU,%d1:l:1),%a0        |; A0 = tbl*
 
-    |; calculate number of pages of total ram
-    move.l  #PAGESIZE,%d1                   |;
-    divu.l  %d1,%d2                         |;
-    move.l  %d2,%d3                         |; save total num pages of RAM
+    |; int * tblEnd = tblStart + tblSize
+    move.l  %d0,%d4                         |; D4 = tableSize
+    add.l   %a0,%d4                         |; D4 = tblEnd    
 
-    |; calculate pointer to user MMU table
-    mulu    %d0,%d2                         |; ramPages * user
-    lea     MMUTABLEU,%a0                   |;
-    add.l   %d2,%a0                         |;
-    add.l   %a0,%d3                         |; this is the top mmu table addr
-    move.l  %d3,%sp@(0)                     |;
+    |; int uMemPages = (USERTABLE[user].utblMemLen)/pageSize;
+    move.l  %sp@(4),%d0                     |; D0 = user
+    mulu    #utbl_size,%d0                  |; D0 = user table offset
+    lea     @(USERTABLE,%d0:l:1),%a1        |; A1 = user table pointer
+    move.l  %a1@(utblMemLen),%d3            |; D3 = USERTABLE[user].utblMemLen
+    divu.l  #PAGESIZE,%d3                   |; D3 = uMemPages
 
-    |; calculate pointer to user table
-    lea     USERTABLE,%a1                   |; pointer to base table
-    move.l  %d0,%d2                         |; 
-    mulu    #utbl_size,%d2                  |;
-    add.l   %d2,%a1                         |;
+    |; int uMem = USERTABLE[user].utblMemPtr;
+    move.l  %a1@(utblMemPtr),%d2            |; D2 = uMem
 
-    |; save user MMU table pointer to user table
-    move.l  %a0,%a1@(utblMmuRoot)           |; 
-    move.l  #0x80000002,%a1@(utblMmuReg)    |; for root table
+    |; USERTABLE[user].utblMmuRoot = tbl;
+    move.l  %a0,%a1@(utblMmuRoot)           |;
 
-    |; calculate number of user memory pages
-    move.l  %a1@(utblMemLen),%d2            |; user memory size in bytes
-    divu.l  %d1,%d2                         |; user memory size in pages
-    move.l  %d2,%sp@(4)                     |;
+    |; USERTABLE[user].utblMmuReg = 0x80000002
+    move.l  #0x80000002,%a1@(utblMmuReg)    |;
 
-    |; get user physical memory start address
-    move.l  %a1@(utblMemPtr),%d2            |;
+    |; do{
+    |;      *tbl++ = uMem;
+1:  move.l  %d2,%d0                         |; D0 = uMem
+    ori.l   #MMU_DT_PAGE,%d0                |; D0 = uMem | MMU_DT_PAGE
+    move.l  %d0,%a0@+                       |; *tbl++ = uMem
+    |;      uMem += pageSize
+    add.l   #PAGESIZE,%d2                   |; 
+    |; } while(--uMemPages)
+    subq.l  #1,%d3                          |; --uMemPages
+    bne.s   1b
 
-    |; start copy loop
-    move.l  %sp@(4),%d4                     |; set up loop counter
-    subq.l  #1,%d4
-1:  move.l  %d2,%d3                         |;
-    ori.l   #MMU_DT_TBL4,%d3                |; apply MMU flags
-    move.l  %d3,%a0@+                       |; write to table
-    add.l   %d1,%d2                         |; increment page
-    dbra    %d4,1b
+    debugPrintStrI "."
 
-    |; calculate number of pages for BASIC, rounded to full page
-    move.l  #RAMBASIC,%d4                   |;
-    move.l  #SIZEBASIC,%d2                  |;
-    move.l  %d1,%d3                         |; 
-    subq.l  #1,%d3                          |; (PAGESIZE - 1)
-    add.l   %d3,%d2                         |; (basicsize + pagesize-1)
-    not.l   %d3                             |; invert pagesize-1
-    and.l   %d3,%d2                         |; round to page size
-    divu.l  %d1,%d2                         |; number of pages
+    |; uMemPages = ((SIZEBASIC + (pageSize-1)) & ~(pageSize-1)) /  pageSize
+    move.l  #SIZEBASIC,%d3                  |; D3 = SIZEBASIC
+    move.l  #PAGESIZE,%d0                   |; D0 = pageSize
+    move.l  %d0,%d1                         |; D1 = pageSize
+    subq.l  #1,%d1                          |; D1 = pageSize - 1
+    add.l   %d1,%d3                         |; D3 = SIZEBASIC + (pageSize - 1)
+    not.l   %d1                             |; D1 = ~(pageSize - 1)
+    and.l   %d1,%d3                         |; D3 = SIZEBASIC rounded to page
+    divu.l  %d0,%d3                         |; D3 = num pages for BASIC
 
-    |; start copy loop
-    subq.l  #1,%d2                          |; loop counter
-2:  move.l  %d4,%d3                         |; 
-    ori.l   #(MMU_WP + MMU_DT_TBL4),%d3     |; apply MMU flags
-    move.l  %d3,%a0@+                       |; write to table
-    add.l   %d1,%d4                         |; increment page
-    dbra    %d2,2b                          |;
+    |; uMem = RAMBASIC
+    move.l  #RAMBASIC,%d2                   |; D2 = uMem
 
-    |; start copy loop to mark remainder of vmem as invalid
-    move.l  %sp@(0),%a2                     |; total memory size
-3:  move.l  #MMU_DT_INVALID,%a0@+           |; write invalid to table
-    cmpa.l  %a2,%a0                         |; 
-    blt.s   3b                              |;
+    |; do {
+    |;      *tbl++ = uMem | MMU_DT_PAGE | MMU_WP;
+2:  move.l  %d2,%d0                         |; D0 = uMem
+    ori.l   #(MMU_DT_PAGE + MMU_WP),%d0     |; D0 = uMem | MMU_DT_PAGE + MMU_WP
+    move.l  %d0,%a0@+                       |; *tbl++ = uMem
+    |;      uMem += pageSize
+    add.l   #PAGESIZE,%d2                   |;
+    |; } while(--uMemPages)
+    subq.l  #1,%d3
+    bne.s   2b
 
-    |; wrap up
-    unlk    %a6                             |;
-    |; debugPrintStrI ","
-    rts
+    debugPrintStrI "."
+
+    |; while(tbl < tblEnd)
+    move.l  #MMU_DT_INVALID,%d0             |; speed up writing table a bit
+3:  cmp.l   %d4,%a0                         |; 
+    beq.s   4f                              |; 
+    |;      *tbl++ = MMU_DT_INVALID
+    move.l  %d0,%a0@+                       |;
+    bra.s   3b
+
+4:  debugPrintStrI ","
+    rts                                     |;
 
 
 |; initialize MMU tables & registers
@@ -124,9 +133,10 @@ initMMU:
     move.l  #MAXUSERS,%d7                   |;
     subq.l  #1,%d7                          |; set loop counter
 1:  move.l  %d7,%d0
-    |; debugPrintHexByte %d0
-    move.l  %d7,%d0
+    debugPrintHexByte %d0
+    move.l  %d7,%sp@-
     bsr     initUserMMU                     |; initialize user MMU table
+    move.l  %sp@+,%d7
     dbra    %d7,1b                          |; 
 
 debugPrintStrI "\r\nSupervisor Table:\r\n"
@@ -195,7 +205,7 @@ debugPrintStrI "\r\nSupervisor Table:\r\n"
     debugPrintStrI "--------------------------------------------------------\r\n"
     |;              00000000 
     lea     MMUTABLEU,%a0
-    move.l  #255,%d7
+    move.l  #1023,%d7
 3:  move.l  %a0,%d0
     debugPrintHexLong %d0
     debugPrintStrI " "

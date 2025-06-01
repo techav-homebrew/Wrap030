@@ -207,6 +207,7 @@ printException:
     addq.l  #4,%d0                          |;
     bsr     exceptPrintLong                 |;
 
+/*
     exceptPrintStrS strPCTrace              |; print last few instructions
     move.l  %a6@(6),%a0                     |; get current PC
     move.l  %a0@-,%sp@-
@@ -238,6 +239,7 @@ printException:
     exceptPrintStrS strPCSpace
     move.l  %sp@+,%d0
     bsr     exceptPrintLong
+*/
 
 
     move.w  %a6@(10),%d0                    |; get frame format
@@ -269,7 +271,7 @@ exceptFault:
 
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get current user number
-    jsr     kUserTblInit                    |; reinitialize current user
+    bsr     kUserTblInit                    |; reinitialize current user
 
     lea     NextUser,%a0                    |; update return address to switch
     move.l  %a0,%a6@(6)                     |;  to next user on rte
