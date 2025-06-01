@@ -90,7 +90,9 @@ SECTIONS{
         . = ALIGN(4);
         Kernel/kernel.o (text)
         . = ALIGN(4);
-
+    } > rom = 0xff
+    .basic 0x00008000 :
+    {
         ROMBASIC = . ;
         RAMBASIC = . ;
         .basicStart = . ;
@@ -107,9 +109,13 @@ SECTIONS{
     {
         USERTABLE = . ;
     } > ram
-    .kmmutable 0x000A0000 (NOLOAD) :
+    .kmmutables 0x000A0000 (NOLOAD) :
     {
-        MMUTABLE = . ;
+        MMUTABLES = . ;
+    } > ram
+    .kmmutableu 0x000A8000 (NOLOAD) :
+    {
+        MMUTABLEU = . ;
     } > ram
 
     .usermem 0x00800000 (NOLOAD) :

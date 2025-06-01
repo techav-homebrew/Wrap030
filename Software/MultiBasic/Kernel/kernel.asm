@@ -71,6 +71,9 @@ kInit:
     debugPrintStrI "OK\r\n"
 
     |; initialize MMU?
+    debugPrintStrI "Initializing MMU ... "
+    bsr     initMMU                         |;
+    debugPrintStrI "OK\r\n"
 
     |; jump execution to first user program
     debugPrintStrI "Starting execution at user 0\r\n\r\n> "
@@ -112,17 +115,21 @@ kUserTblInit:
     lea     %pc@(tblUserMem),%a2            |; set user memory start address
     move.l  %a2@(%d2.L),%d4                 |;
     move.l  %d4,%a1@(utblMemPtr)            |;
-    move.l  %d4,%a1@(utblRegA0)             |; 
+|;    move.l  %d4,%a1@(utblRegA0)             |; 
+    move.l  #0,%a1@(utblRegA0)              |; logical memory start address for BASIC start parameter
+
     lea     %pc@(tblUserMemSize),%a2        |; set user memory size
     move.l  %a2@(%d2.L),%d5                 |;
     move.l  %d5,%a1@(utblMemLen)            |;
     move.l  %d5,%a1@(utblRegD0)             |;
 
-    add.l   %d5,%d4                         |; calculate initial user stack pointer
-    move.l  %d4,%a1@(utblRegA7)             |; 
+|;    add.l   %d5,%d4                         |; calculate initial user stack pointer
+|;    move.l  %d4,%a1@(utblRegA7)             |; 
+    move.l  %d5,%a1@(utblRegA7)             |; set end of logical memory for user initial SP
 
-    lea     RAMBASIC,%a2                    |; get pointer to BASIC in RAM
-    move.l  %a2,%a1@(utblRegPC)             |;
+|;    lea     RAMBASIC,%a2                    |; get pointer to BASIC in RAM
+|;    move.l  %a2,%a1@(utblRegPC)             |;
+    move.l  %d5,%a1@(utblRegPC)             |; logical start address for BASIC is just past vmemory
 
     move.w  %sp@+,%a1@(utblUsrMode)         |; restore user mode
 
@@ -242,7 +249,7 @@ RestoreUserContext:
     lea     USERTABLE,%a0                   |; get user table pointer again
     add.l   %d0,%a0                         |; add user offset
     
-
+    pmove   %a0@(utblMmuReg),%crp           |; set user mmu root pointer
     move.l  %a0@(utblRegA7),%a1             |; restore all registers
     move.l  %a1,%usp
     move.w  %a0@(utblRegCCR),%sp@
@@ -345,7 +352,7 @@ doSysTrapConWrite:
 
     .even
 
-
+    .include "mmutables.inc"
     .include "supervisor.inc"
 
 

@@ -74,9 +74,10 @@ utblRegCCR: .space  4                       |; user status register
 utblRegPC:  .space  4                       |; user program counter
 utblMemPtr: .space  4                       |; user main memory pointer
 utblMemLen: .space  4                       |; user main memory size
-utblMmuRoot: .space 4
+utblMmuReg: .space  4                       |; mmu root table pointer
+utblMmuRoot: .space 4                       |; mmu table root
 utblUsrMode: .space 1                       |; user mode [0: terminal | 1: modem]
-utblUndefined:  .space  35                  |; pad table to 32 longwords
+utblUndefined:  .space  31                  |; pad table to 32 longwords
 utbl_size = . - utbl                        |; size of this table
 
     .equ    uModeTerminal,  0
