@@ -83,7 +83,7 @@ SECTIONS{
         Kernel/vectors.o (text)
         . = ALIGN(4);
     } > rom = 0xff
-    .kernel 0x00001000 :
+    .kernel 0x00001100 :
     {
         RESETENTRY = .;
         Kernel/boot.o (text)

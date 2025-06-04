@@ -42,6 +42,7 @@ initSupvMMU:
 |;      D4: tblEnd
 initUserMMU:
     |; int tableSize = ((ramTop + 1 - ramBot) / pageSize) >> 2;
+    |; debugPrintStrI ":"
     move.l  #ramTop,%d0                     |;
     addq.l  #1,%d0                          |;
     sub.l   #ramBot,%d0                     |;
@@ -69,6 +70,8 @@ initUserMMU:
 
     |; USERTABLE[user].utblMmuRoot = tbl;
     move.l  %a0,%a1@(utblMmuRoot)           |;
+    move.l  %a0,%d0
+    |; debugPrintHexLong %d0
 
     |; USERTABLE[user].utblMmuReg = 0x80000002
     move.l  #0x80000002,%a1@(utblMmuReg)    |;
@@ -84,7 +87,7 @@ initUserMMU:
     subq.l  #1,%d3                          |; --uMemPages
     bne.s   1b
 
-    debugPrintStrI "."
+    |; debugPrintStrI "."
 
     |; uMemPages = ((SIZEBASIC + (pageSize-1)) & ~(pageSize-1)) /  pageSize
     move.l  #SIZEBASIC,%d3                  |; D3 = SIZEBASIC
@@ -110,7 +113,7 @@ initUserMMU:
     subq.l  #1,%d3
     bne.s   2b
 
-    debugPrintStrI "."
+    |; debugPrintStrI "."
 
     |; while(tbl < tblEnd)
     move.l  #MMU_DT_INVALID,%d0             |; speed up writing table a bit
@@ -120,25 +123,25 @@ initUserMMU:
     move.l  %d0,%a0@+                       |;
     bra.s   3b
 
-4:  debugPrintStrI ","
+4:  |; debugPrintStrI ","
     rts                                     |;
 
 
 |; initialize MMU tables & registers
 initMMU:
     |; initialize MMU tables
-    debugPrintStrI "Supv; "
+    |; debugPrintStrI "Supv; "
     bsr     initSupvMMU                     |; initialize supervisor MMU table
-    debugPrintStrI "Users; "
+    |; debugPrintStrI "Users; "
     move.l  #MAXUSERS,%d7                   |;
     subq.l  #1,%d7                          |; set loop counter
 1:  move.l  %d7,%d0
-    debugPrintHexByte %d0
+    |; debugPrintHexByte %d0
     move.l  %d7,%sp@-
     bsr     initUserMMU                     |; initialize user MMU table
     move.l  %sp@+,%d7
     dbra    %d7,1b                          |; 
-
+/*
 debugPrintStrI "\r\nSupervisor Table:\r\n"
     debugPrintStrI "address: 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\r\n"
     debugPrintStrI "--------------------------------------------------------\r\n"
@@ -260,18 +263,18 @@ debugPrintStrI "\r\nSupervisor Table:\r\n"
     debugPrintCharI 0x0d
     debugPrintCharI 0x0a
     dbra    %d7,3b
-
+*/
 
     lea     kScratchMMU,%a0
 
     |; set up transparent translation control registers
-    debugPrintStrI "TT0; "
+    |; debugPrintStrI "TT0; "
     move.l  #0x807f8543,%a0@                |; transparent Supv access above 2GB
     pmove   %a0@,%tt0                       |;
 
     |; set up supervisor root pointer register
-    debugPrintStrI "SRP; "
-    move.l  #0x80000202,%a0@                |; no limit, 4-byte table entries
+    |; debugPrintStrI "SRP; "
+    move.l  #0x80000002,%a0@                |; no limit, 4-byte table entries
     move.l  #MMUTABLES,%d0                  |;
     and.l   #0xfffffff0,%d0                 |;
     move.l  %d0,%a0@(4)                     |;
@@ -281,12 +284,15 @@ debugPrintStrI "\r\nSupervisor Table:\r\n"
     |; we'll do this later
 
     |; flush MMU cache
-    debugPrintStrI "ATC; "
+    |; debugPrintStrI "ATC; "
     pflusha                                 |;
 
     |; set up translation control register
-    debugPrintStrI "Enabling ... "
+    |; debugPrintStrI "Enabling ... "
     move.l  #0x82f89000,%a0@                |; 32kB page, 8b shift, TIA 9b
     pmove   %a0@,%tc                        |; 
+
+    move.l  #0x00002909,%d0                 |; clear cache
+    movec   %d0,%cacr
 
     rts

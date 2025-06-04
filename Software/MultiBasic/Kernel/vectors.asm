@@ -8,6 +8,8 @@
     .extern USERNUM
     .extern kUserTblInit
     .extern NextUser
+    .extern KTIMER
+    .extern timerBase
 
 
 vector:
@@ -119,9 +121,14 @@ exceptPrintLong:
 
 
 printException:
+    ori.w   #0700,%sr                       |; disable interrupts
+    move.b  #0,timerBase                    |; cancel timer
     link    %a6,#-8                         |; space for local vars
     move.l  %d0,%a6@(-4)                    |; save working registers
     move.l  %a0,%a6@(-8)                    |;
+
+    move.w  %a6@(10),%d0                    |; immediately print vector
+    bsr     exceptPrintWord                 |;
 
     exceptPrintStrS strHead
 
@@ -131,8 +138,8 @@ printException:
     bsr     exceptPrintStr                  |; print exception name
 
     exceptPrintStrS strUser                 |; print current user number
-    move.w  USERNUM,%d0                     |;
-    bsr     exceptPrintWord                 |;
+    move.l  USERNUM,%d0                     |;
+    bsr     exceptPrintLong                 |;
 
     exceptPrintStrS strRegPC                |; print PC
     move.l  %a6@(6),%d0                     |;
@@ -195,17 +202,21 @@ printException:
     bsr     exceptPrintLong                 |;
 
     exceptPrintStrS strRegA6                |; print A6
-    move.l  %a6,%d0                         |;
+    move.l  %a6@,%d0                        |;
     bsr     exceptPrintLong                 |;
 
     exceptPrintStrS strRegD7                |; print D7
     move.l  %d7,%d0                         |;
     bsr     exceptPrintLong                 |;
 
-    exceptPrintStrS strRegA1                |; print A7
+    exceptPrintStrS strRegA7                |; print A7 (SSP)
     move.l  %a6,%d0                         |;
     addq.l  #4,%d0                          |;
     bsr     exceptPrintLong                 |;
+
+    exceptPrintStrS strRegUSP               |; print User Stack Pointer
+    movec   %usp,%d0                        |;
+    bsr     exceptPrintLong
 
 /*
     exceptPrintStrS strPCTrace              |; print last few instructions
@@ -255,20 +266,51 @@ exceptPrintEnd:
     move.l  %a6@(-8),%a0                    |; restore registers
     move.l  %a6@(-4),%d0                    |;
     unlk    %a6                             |; unlink stack frame
+    andi.w  #0x78ff,%sr                     |; reenable interrupts
+    move.b  #0,KTIMER                       |; reset timer
     rte                                     |; return from exception
 
 exceptTrap:
     exceptPrintStrS strInstr
     move.l  %a6@(12),%d0                    |; get instruction pointer
     bsr     exceptPrintLong                 |;
-    bra     exceptPrintEnd                  |; done.
+    |; bra     exceptPrintEnd                  |; done.
+    bra     exceptUserReset
 
 exceptFault:
     exceptPrintStrS strFault
-    move.l  %a6@(14),%d0                    |; get data cycle fault address
+    move.l  %a6@(20),%d0                    |; get data cycle fault address
     bsr     exceptPrintLong                 |;
+    exceptPrintStrS strSSW                  |; print special status word
+    move.w  %a6@(14),%d0                    |;
+    bsr     exceptPrintWord                 |;
+
+    exceptPrintStrS strPipeB                |; print Pipe Stage B
+    move.w  %a6@(18),%d0                    |;
+    bsr     exceptPrintWord                 |;
+    exceptPrintStrS strPipeC                |; print Pipe Stage C
+    move.w  %a6@(16),%d0                    |;
+    bsr     exceptPrintWord                 |;
+    exceptPrintStrS strBufO                 |; print Output Buffer
+    move.l  %a6@(28),%d0                    |;
+    bsr     exceptPrintLong                 |;
+
+    move.w  %a6@(10),%d0                    |; get vector offset
+    lsr.w   #8,%d0                          |; get frame type
+    lsr.w   #4,%d0                          |; 
+    cmpi.w  #0x0b,%d0                       |; check for long frame
+    bne     1f
+    exceptPrintStrS strBufI                 |; print Input Buffer
+    move.l  %a6@(48),%d0                    |;
+    bsr     exceptPrintLong                 |;
+    exceptPrintStrS strBAddr                |; print Stage B address
+    move.l  %a6@(40),%d0                    |;
+    bsr     exceptPrintLong                 |;
+
+1:
     andi.w  #0xCEFF,%a6@(14)                |; clear retry bits
 
+exceptUserReset:
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get current user number
     bsr     kUserTblInit                    |; reinitialize current user
@@ -341,7 +383,7 @@ vectorNameTable:
     .dcb.l  128,strUnused   |; 128-255  200-3fc
 
 
-strHead:    .ascii  "\r\n\r\n!!!!!!!!!! EXCEPTION: \0"
+strHead:    .ascii  "\r\n!!!!!!!!!! EXCEPTION: \0"
 strUser:    .ascii  " !!!!!!!!!!\r\n  User: \0"
 strRegPC:   .ascii  "\r\n  PC: 0x\0"
 strRegD0:   .ascii  "\r\n  D0: 0x\0"
@@ -361,11 +403,18 @@ strRegA4:   .ascii  " A4: 0x\0"
 strRegA5:   .ascii  " A5: 0x\0"
 strRegA6:   .ascii  " A6: 0x\0"
 strRegA7:   .ascii  " A7: 0x\0"
+strRegUSP:  .ascii  " USP: 0x\0"
 strPCTrace: .ascii  "\r\n  Program:\r\n    0x\0"
 strPCSpace: .ascii  " 0x\0"
 strPCTrac1: .ascii  "\r\n    0x\0"
 strFault:   .ascii  "\r\n  Fault Address: 0x\0"
 strInstr:   .ascii  "\r\n  Instruction Pointer: 0x\0"
+strSSW:     .ascii  " Special Status Word: 0x\0"
+strPipeB:   .ascii  "\r\n  Pipeline B: 0x\0"
+strPipeC:   .ascii  " Pipeline C: 0x\0"
+strBufO:    .ascii  "\r\n  Output Buf: 0x\0"
+strBufI:    .ascii  " Input Buf: 0x\0"
+strBAddr:   .ascii  "\r\n  Stage B Addr: 0x\0"
 strFoot:    .ascii  "\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n\r\n> \0"
 
 |; table of friendly name strings for all vectors

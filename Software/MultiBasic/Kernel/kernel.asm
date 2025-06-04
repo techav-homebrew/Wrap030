@@ -27,7 +27,8 @@ WARMBOOT:
     |; enable CPU cache
 kEnableCache:
 .ifndef     SIMULATE
-    move.l  #0x00000101,%d0                 |; enable data & instruction cache
+|;    move.l  #0x00000101,%d0                 |; enable data & instruction cache
+    move.l  #0x00002909,%d0                 |; clear & enable cache
     movec   %d0,%cacr                       |; write to cache control register
     debugPrintStrI "Cache enabled\r\n"
 .endif
@@ -250,6 +251,9 @@ RestoreUserContext:
     add.l   %d0,%a0                         |; add user offset
     
     pmove   %a0@(utblMmuReg),%crp           |; set user mmu root pointer
+    pflusha                                 |; this shouldn't be necessary
+    move.l  #0x00002909,%d0                 |; clear cache
+    movec   %d0,%cacr                       |; 
     move.l  %a0@(utblRegA7),%a1             |; restore all registers
     move.l  %a1,%usp
     move.w  %a0@(utblRegCCR),%sp@
@@ -292,6 +296,7 @@ RestoreUserContext:
 
 .RestoreExit:
     move.b  #0,KTIMER                       |; set interval timer
+    pflusha
     rte
 
 
@@ -312,7 +317,8 @@ doSysTrapConRead:
     move.l  %sp@+,%a0                       |; restore working registers
     move.b  #0,%d0                          |; clear d0
     |; andi.w  #0xfffe,%sp@(0)                 |; clear carry on saved status register
-    rte
+    bra     .RestoreExit
+    |;rte
 1:                                          |; RXREADY
     move.b  %a0@(comRegRX),%d0              |; read byte from console
     |;debugPrintStrI "$"
@@ -320,7 +326,8 @@ doSysTrapConRead:
     |;debugPrintStrI ";"
     move.l  %sp@+,%a0                       |; restore working registers
     |; ori.w   #0x0001,%sp@(0)                 |; set carry on saved status register
-    rte
+    bra     .RestoreExit
+    |;rte
 
 doSysTrapConWrite:
     movem.l %a0/%d2,%sp@-                   |; save working registers
@@ -342,12 +349,14 @@ doSysTrapConWrite:
     |;debugPrintHexByte %d0
     |;debugPrintStrI ";"
     movem.l %sp@+,%a0/%d2                   |; restore working registers
-    rte
+    bra     .RestoreExit
+    |;rte
 1:                                          |; TXNOTREADY
     movem.l %sp@+,%a0/%d2                   |; restore working registers to
                                             |; clear the stack frame
     bra     NextUser                        |; yield to next user
-    rte
+    bra     .RestoreExit
+    |;rte
 
 
     .even
