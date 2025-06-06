@@ -90,6 +90,9 @@ SECTIONS{
         . = ALIGN(4);
         Kernel/kernel.o (text)
         . = ALIGN(4);
+        libc/*.o (text)
+        libff/*.o (text)
+        wdisk/*.o (text)
     } > rom = 0xff
     .basic 0x00008000 :
     {
@@ -99,25 +102,31 @@ SECTIONS{
         EhBASIC/ehbasic.o (text)
         .basicEnd = . ;
     } > rom = 0xff
-    .kglobals 0x00080000 (NOLOAD) :
+    .kglobals 0x00010000 (NOLOAD) :
     {
         Kernel/vectors.o ( bss )
         Kernel/boot.o ( bss )
         Kernel/kernel.o ( bss )
+        libc/*.o ( bss )
+        libff/*.o ( bss )
+        wdisk/*.o ( bss )
     } > ram
-    .kusertable 0x00090000 (NOLOAD) :
+    .kusertable 0x00018000 (NOLOAD) :
     {
         USERTABLE = . ;
     } > ram
-    .kmmutables 0x000A0000 (NOLOAD) :
+    .kmmutables 0x00020000 (NOLOAD) :
     {
         MMUTABLES = . ;
     } > ram
-    .kmmutableu 0x000A8000 (NOLOAD) :
+    .kmmutableu 0x00028000 (NOLOAD) :
     {
         MMUTABLEU = . ;
     } > ram
-
+    .kdiskbuf 0x00080000 (NOLOAD) :
+    {
+        DISKBUFU = . ;
+    } > ram
     .usermem 0x00800000 (NOLOAD) :
     {
         STACKINIT = . ;
