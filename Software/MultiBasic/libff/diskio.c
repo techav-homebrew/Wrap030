@@ -30,33 +30,6 @@ DSTATUS disk_status (
 	BYTE pdrv		/* Physical drive number to identify the drive */
 )
 {
-	/*
-	DSTATUS stat;
-	int result;
-	switch (pdrv) {
-	case DEV_RAM :
-		result = RAM_disk_status();
-
-		// translate the result code here
-
-		return stat;
-
-	case DEV_MMC :
-		result = MMC_disk_status();
-
-		// translate the result code here
-
-		return stat;
-
-	case DEV_USB :
-		result = USB_disk_status();
-
-		// translate the result code here
-
-		return stat;
-	}
-	return STA_NOINIT;
-	*/
 	return wrap030_disk_status(pdrv);
 }
 
@@ -70,33 +43,6 @@ DSTATUS disk_initialize (
 	BYTE pdrv				/* Physical drive nmuber to identify the drive */
 )
 {
-	/*
-	DSTATUS stat;
-	int result;
-	switch (pdrv) {
-	case DEV_RAM :
-		result = RAM_disk_initialize();
-
-		// translate the result code here
-
-		return stat;
-
-	case DEV_MMC :
-		result = MMC_disk_initialize();
-
-		// translate the result code here
-
-		return stat;
-
-	case DEV_USB :
-		result = USB_disk_initialize();
-
-		// translate the result code here
-
-		return stat;
-	}
-	return STA_NOINIT;
-	*/
 	return wrap030_disk_initialize(pdrv);
 }
 
@@ -113,40 +59,6 @@ DRESULT disk_read (
 	UINT count		/* Number of sectors to read */
 )
 {
-	/*
-	DRESULT res;
-	int result;
-	switch (pdrv) {
-	case DEV_RAM :
-		// translate the arguments here
-
-		result = RAM_disk_read(buff, sector, count);
-
-		// translate the result code here
-
-		return res;
-
-	case DEV_MMC :
-		// translate the arguments here
-
-		result = MMC_disk_read(buff, sector, count);
-
-		// translate the result code here
-
-		return res;
-
-	case DEV_USB :
-		// translate the arguments here
-
-		result = USB_disk_read(buff, sector, count);
-
-		// translate the result code here
-
-		return res;
-	}
-	return RES_PARERR;
-	*/
-	//return wrap030_disk_read(pdrv,buff,sector,count);
 	int retryCount = RETRYCOUNT;
 	while(retryCount--)
 	{

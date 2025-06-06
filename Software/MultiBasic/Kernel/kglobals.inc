@@ -76,8 +76,10 @@ utblMemPtr: .space  4                       |; user main memory pointer
 utblMemLen: .space  4                       |; user main memory size
 utblMmuReg: .space  4                       |; mmu root table pointer
 utblMmuRoot: .space 4                       |; mmu table root
+utblFilePtr: .space 4                       |; filesystem pointer
+ubtlDiskBuf: .space 4                       |; disk read/write buffer
 utblUsrMode: .space 1                       |; user mode [0: terminal | 1: modem]
-utblUndefined:  .space  31                  |; pad table to 32 longwords
+utblUndefined:  .space  23                  |; pad table to 32 longwords
 utbl_size = . - utbl                        |; size of this table
 
     .equ    uModeTerminal,  0

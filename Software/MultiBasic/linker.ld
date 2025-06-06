@@ -75,6 +75,9 @@ uMemSize5   = uMemSize;
 uMemSize6   = uMemSize;
 uMemSize7   = uMemSize;
 
+uFSbufSize  = 1 * 1024;
+uFilBufSize = (512 * 1024) - uFSbufSize;
+
 ENTRY(COLDBOOT)
 SECTIONS{
     .vectors 0x00000000 :
@@ -126,6 +129,39 @@ SECTIONS{
     .kdiskbuf 0x00080000 (NOLOAD) :
     {
         DISKBUFU = . ;
+
+        uFSBuf0 = . ;
+        . += uFSbufSize;
+        uFilBuf0 = .;
+        . += uFilBufSize;
+        uFSBuf1 = . ;
+        . += uFSbufSize;
+        uFilBuf1 = .;
+        . += uFilBufSize;
+        uFSBuf2 = . ;
+        . += uFSbufSize;
+        uFilBuf2 = .;
+        . += uFilBufSize;
+        uFSBuf3 = . ;
+        . += uFSbufSize;
+        uFilBuf3 = .;
+        . += uFilBufSize;
+        uFSBuf4 = . ;
+        . += uFSbufSize;
+        uFilBuf4 = .;
+        . += uFilBufSize;
+        uFSBuf5 = . ;
+        . += uFSbufSize;
+        uFilBuf5 = .;
+        . += uFilBufSize;
+        uFSBuf6 = . ;
+        . += uFSbufSize;
+        uFilBuf6 = .;
+        . += uFilBufSize;
+        uFSBuf7 = . ;
+        . += uFSbufSize;
+        uFilBuf7 = .;
+        . += uFilBufSize;
     } > ram
     .usermem 0x00800000 (NOLOAD) :
     {

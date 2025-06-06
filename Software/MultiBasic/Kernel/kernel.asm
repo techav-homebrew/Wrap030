@@ -113,6 +113,11 @@ kUserTblInit:
     lea     tblUserConOut,%a2               |; set user console out device address
     move.l  %a2@(%d2.L),%a1@(utblConOut)    |;
 
+    lea     %pc@(tblUserFSbuf),%a2          |; set user filesystem buffer pointer
+    move.l  %a2@(%d2.L),%a1@(utblFilePtr)   |; 
+    lea     %pc@(tblUserFilBuf),%a2         |; set user file buffer pointer
+    move.l  %a2@(%d2.L),%a1@(ubtlDiskBuf)   |;
+
     lea     %pc@(tblUserMem),%a2            |; set user memory start address
     move.l  %a2@(%d2.L),%d4                 |;
     move.l  %d4,%a1@(utblMemPtr)            |;
@@ -161,6 +166,12 @@ SysTrapTbl:
     beq     doSysTrapConRead
     cmp.b   #SysTrapConWrite,%d1
     beq     doSysTrapConWrite
+    cmp.b   #SysTrapFileOpen,%d1
+    beq     doSysTrapFileOpen
+    cmp.b   #SysTrapFileClose,%d1
+    beq     doSysTrapFileClose
+    cmp.b   #SysTrapFileRead,%d1
+    beq     doSysTrapFileRead
 
     rte
 
@@ -168,7 +179,6 @@ SysTrapTbl:
 |; task switch 
 doSysTrapYield:
     move.b  #0,timerBase                    |; clear timer
-
 
 |; save user state to user table
 SaveUserContext:
@@ -200,10 +210,7 @@ SaveUserContext:
     move.w  %sp@,%a0@(utblRegCCR)
     move.l  %sp@(2),%a0@(utblRegPC)
 
-
-
     bsr     supvConsole                     |; check in on supervisor console
-
 
 NextUser:
     |; get user number
@@ -359,6 +366,75 @@ doSysTrapConWrite:
     |;rte
 
 
+|; syscall wrapper for libff function:
+|; FRESULT f_open(FIL * fp, const TCHAR* path, BYTE mode)
+|; requires pointer to filename in A0.L
+|; requires mode in D0.B
+|; returns FRESULT in D0.L
+doSysTrapFileOpen:
+    movem.l %a1-%a6/%d1-%d7,%sp@-           |; just ... go ahead and save all
+    move.b  %d0,%sp@-                       |; push mode parameter to stack
+    move.l  %a0,%sp@-                       |; push path parameter to stack
+
+    lea     USERTABLE,%a0                   |; get user table pointer
+    move.l  USERNUM,%d0                     |;
+    mulu    #utbl_size,%d0                  |;
+    add.l   %d0,%a0                         |;
+    move.l  %a0@(utblFilePtr),%d0           |; get user filesystem pointer
+    move.l  %d0,%sp@-                       |; push filesystem parameter
+
+    bsr.l   f_open                          |; do file open
+
+    add.l   #10,%sp                         |; clear parameters from stack
+    
+    movem.l %sp@+,%a1-%a6/%d1-%d7           |; restore all
+    bra     .RestoreExit
+
+|; syscall wrapper for libff function:
+|; FRESULT f_close(FIL * fp)
+|; returns FRESULT in D0.L
+doSysTrapFileClose:
+    movem.l %a0-%a6/%d0-%d7,%sp@-           |; save all before C call
+
+    lea     USERTABLE,%a0                   |; get user table pointer
+    move.l  USERNUM,%d0                     |; 
+    mulu    #utbl_size,%d0                  |;
+    add.l   %d0,%a0                         |;
+    move.l  %a0@(utblFilePtr),%d0           |; get user filesystem pointer
+    move.l  %d0,%sp@-                       |; push filesystem parameter
+
+    bsr.l   f_close                         |; do file close
+
+    add.l   #4,%sp                          |; clear parameters from stack
+
+    movem.l %sp@+,%a0-%a6/%d0-%d7           |;
+    bra     .RestoreExit
+
+|; syscall wrapper for libff function:
+|; FRESULT f_read(FIL * fp, void * buff, UINT btr, UINT * br)
+|; requires bytes to read in D0.L
+|; returns FRESULT in D0.L
+doSysTrapFileRead:
+    movem.l %a0-%a6/%d1-%d7,%sp@-           |; save all before C call
+    move.l  #0,%sp@-                        |; make int bytes read
+    move.l  %sp,%sp@-                       |; push *br parameter to stack
+    move.l  %d0,%sp@-                       |; push btr parameter to stack
+
+    lea     USERTABLE,%a0                   |; get user table pointer
+    move.l  USERNUM,%d0                     |;
+    mulu    #utbl_size,%d0                  |; 
+    add.l   %d0,%a0                         |;
+    move.l  %a0@(ubtlDiskBuf),%sp@-         |; push *buff parameter to stack
+    move.l  %a0@(utblFilePtr),%sp@-         |; push *fp parameter to stack
+
+    bsr.l   f_read                          |; do file read
+
+    add.l   #16,%sp                         |; clear parameters from stack
+
+    movem.l %sp@+,%a0-%a6/%d1-%d7           |;
+    bra     .RestoreExit
+
+
     .even
 
     .include "mmutables.inc"
@@ -407,6 +483,26 @@ tblUserMemSize:
     dc.l    uMemSize5
     dc.l    uMemSize6
     dc.l    uMemSize7
+
+tblUserFSbuf:
+    dc.l    uFSBuf0
+    dc.l    uFSBuf1
+    dc.l    uFSBuf2
+    dc.l    uFSBuf3
+    dc.l    uFSBuf4
+    dc.l    uFSBuf5
+    dc.l    uFSBuf6
+    dc.l    uFSBuf7
+
+tblUserFilBuf:
+    dc.l    uFilBuf0
+    dc.l    uFilBuf1
+    dc.l    uFilBuf2
+    dc.l    uFilBuf3
+    dc.l    uFilBuf4
+    dc.l    uFilBuf5
+    dc.l    uFilBuf6
+    dc.l    uFilBuf7
 
     .even
 kRAMend:
