@@ -189,10 +189,16 @@ ccnull:     ds.b    1                       |; CTRL-C last received byte 'life' 
 
 |; these variables for load/save routines
 
+filebyte:  ds.l    1
+file_id:    ds.l    1
+
 /* ifne   FLASH_SUPPORT
 
 load_first: ds.b    1                       |; Boolean indicating if first byte read
 load_filename:  ds.b    13                  |; Hold LOAD/SAVE filename (DOS 8.3 format plus terminating null)
+load_filename_end:
+
+
 
  endc*/
 

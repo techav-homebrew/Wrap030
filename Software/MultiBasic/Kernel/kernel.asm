@@ -7,6 +7,7 @@
     .global     NextUser
     .global     doSysTrapYield
     .extern     STACKINIT
+    .extern     diskInit
 
     .section text,"ax"
 
@@ -35,6 +36,9 @@ kEnableCache:
 
     |; initialize user number
     clr.l   USERNUM                         |;
+
+kInitDiskIO:
+    bsr.l   diskInit                        |; initialize & mount disk
 
 kInitConsoles:
     |; initialize user console ports
@@ -369,23 +373,24 @@ doSysTrapConWrite:
 |; syscall wrapper for libff function:
 |; FRESULT f_open(FIL * fp, const TCHAR* path, BYTE mode)
 |; requires pointer to filename in A0.L
-|; requires mode in D0.B
+|; requires mode in D0.L
 |; returns FRESULT in D0.L
 doSysTrapFileOpen:
     movem.l %a1-%a6/%d1-%d7,%sp@-           |; just ... go ahead and save all
-    move.b  %d0,%sp@-                       |; push mode parameter to stack
-    move.l  %a0,%sp@-                       |; push path parameter to stack
+    move.l  %d0,%sp@-                       |; push mode parameter to stack
 
-    lea     USERTABLE,%a0                   |; get user table pointer
+    lea     USERTABLE,%a1                   |; get user table pointer
     move.l  USERNUM,%d0                     |;
     mulu    #utbl_size,%d0                  |;
-    add.l   %d0,%a0                         |;
-    move.l  %a0@(utblFilePtr),%d0           |; get user filesystem pointer
+    add.l   %d0,%a1                         |;
+    add.l   %a1@(utblMemPtr),%a0            |; add user base mem addr to ptr
+    move.l  %a0,%sp@-                       |; push path parameter to stack
+    move.l  %a1@(utblFilePtr),%d0           |; get user filesystem pointer
     move.l  %d0,%sp@-                       |; push filesystem parameter
 
     bsr.l   f_open                          |; do file open
 
-    add.l   #10,%sp                         |; clear parameters from stack
+    add.l   #12,%sp                         |; clear parameters from stack
     
     movem.l %sp@+,%a1-%a6/%d1-%d7           |; restore all
     bra     .RestoreExit
@@ -395,6 +400,10 @@ doSysTrapFileOpen:
 |; returns FRESULT in D0.L
 doSysTrapFileClose:
     movem.l %a0-%a6/%d0-%d7,%sp@-           |; save all before C call
+
+1:  btst    #1,acia1Com
+    beq.s   1b
+    move.b  #'#',acia1Dat
 
     lea     USERTABLE,%a0                   |; get user table pointer
     move.l  USERNUM,%d0                     |; 
@@ -410,28 +419,36 @@ doSysTrapFileClose:
     movem.l %sp@+,%a0-%a6/%d0-%d7           |;
     bra     .RestoreExit
 
+
 |; syscall wrapper for libff function:
 |; FRESULT f_read(FIL * fp, void * buff, UINT btr, UINT * br)
 |; requires bytes to read in D0.L
+|; requires buffer pointer in A0.L
 |; returns FRESULT in D0.L
+|; returns bytes read count in D1.L
+|; clobbers A0
 doSysTrapFileRead:
-    movem.l %a0-%a6/%d1-%d7,%sp@-           |; save all before C call
-    move.l  #0,%sp@-                        |; make int bytes read
-    move.l  %sp,%sp@-                       |; push *br parameter to stack
-    move.l  %d0,%sp@-                       |; push btr parameter to stack
+    movem.l %a1-%a6/%d2-%d7,%sp@-           |; save before calling C function
 
-    lea     USERTABLE,%a0                   |; get user table pointer
+    move.l  #0,%sp@-                        |; make space for bytes read
+    move.l  %sp,%sp@-                       |; push parameter *br
+    move.l  %d0,%sp@-                       |; push parameter btr
+    |;move.l  %a0,%sp@-                       |; push parameter *buff
+
+    lea     USERTABLE,%a1                   |; get user table pointer
     move.l  USERNUM,%d0                     |;
-    mulu    #utbl_size,%d0                  |; 
-    add.l   %d0,%a0                         |;
-    move.l  %a0@(ubtlDiskBuf),%sp@-         |; push *buff parameter to stack
-    move.l  %a0@(utblFilePtr),%sp@-         |; push *fp parameter to stack
+    mulu    #utbl_size,%d0                  |;
+    add.l   %d0,%a1                         |;
+    add.l   %a1@(utblMemPtr),%a0            |; add base mem pointer
+    move.l  %a0,%sp@-                       |; push parameter *buff
+    move.l  %a1@(utblFilePtr),%sp@-         |; push parameter *fp
 
-    bsr.l   f_read                          |; do file read
+    bsr.l   f_read
 
     add.l   #16,%sp                         |; clear parameters from stack
+    move.l  %sp@+,%d1                       |; get bytes read
 
-    movem.l %sp@+,%a0-%a6/%d1-%d7           |;
+    movem.l %sp@+,%a1-%a6/%d2-%d7           |; restore registers
     bra     .RestoreExit
 
 

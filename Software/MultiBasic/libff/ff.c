@@ -25,7 +25,7 @@
 #include "diskio.h"		/* Declarations of device I/O functions */
 
 #ifdef DEBUG
-#include "../wboot/acia.h"
+#include "../wdisk/acia.h"
 #endif
 
 /*--------------------------------------------------------------------------
@@ -245,6 +245,8 @@
 #error Static LFN work area cannot be used in thread-safe configuration
 #endif
 #define LEAVE_FF(fs, res)	{ unlock_volume(fs, res); return res; }
+#elif DEBUG
+#define LEAVE_FF(fs, res) 	{ printStr("{"); printHexByte(res); printStrLn("}"); return res; }
 #else
 #define LEAVE_FF(fs, res)	return res
 #endif
@@ -3905,6 +3907,14 @@ FRESULT f_open (
 
 	#ifdef DEBUG
 	printStrLn("*F_OPEN* debug enabled");
+	printStr("F_OPEN(0x");
+	printHexLong((int)fp);
+	printStr(", 0x");
+	printHexLong((int)path);
+	printStr(", 0x");
+	printHexByte(mode);
+	printStr(") - ");
+	printStrLn((char *)path);
 	#endif
 
 
@@ -4415,6 +4425,10 @@ FRESULT f_close (
 {
 	FRESULT res;
 	FATFS *fs;
+
+#ifdef DEBUG
+	printStrLn("*F_CLOSE*");
+#endif
 
 #if !FF_FS_READONLY
 	res = f_sync(fp);					/* Flush cached data */

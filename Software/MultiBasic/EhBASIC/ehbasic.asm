@@ -155,52 +155,105 @@ RXREADY:
 
 /***********************************************************************************/
 #
-|; LOAD routine for the TS2 computer (not implemented)
-
-| .ifdef   FLASH_SUPPORT
+|; LOAD routine modified for Wrap030
 
 VEC_LD:
-       MOVE.L          #0x2E,%d7                        |; error code 0x2E "Not implemented" error
-       BRA             LAB_XERR             |; do error #%d7, then warm start
+    lea     %pc@(strLoadTitle),%a1          |; get pointer to load prompt
+    bsr     get_filename                    |; get filename from line or request
+                                            |; returns pointer in A1, length in D0
+    beq     LAB_FCER                        |; if name null, then error
 
-| .endif
+    tst.l   %a3@(file_id)                   |; check if read already in progress
+    bne     1f
 
+    move.l  %a1,%a0                         |; set filename pointer
+    moveq.l #0x01,%d0                       |; set file read flag
+    move.l  #SysTrapFileOpen,%d1            |; file open syscall
+    trap    #0                              |; 
 
-|; LOAD routine for the TS2 computer. Supports a Hobbytronics USB Flash
-|; Drive Host Board connected to the auxiliary serial port.
+    tst.l   %d0                             |; check result
+    bne     LOAD_exit                       |; exit on error
 
-/* .ifndef   FLASH_SUPPORT
+    move.l  #-1,%a3@(file_id)               |; mark file read in progress
 
-VEC_LD  LEA             LAB_FILENAME(%pc),%A0   |; Prompt for filename.
-        BSR             PRINTSTRING1        |; Print null terminated string
-        MOVE.L          %A3,%A2             |; Save pointer to RAM variables
-GETFN1  JSR             VEC_IN              |; Get character
-        BCC             GETFN1              |; Go back if carry clear, indicating no key pressed
-        JSR             VEC_OUT             |; Echo the character
-        CMP.B           #0x0D,%D0           |; Was it <Return>?
-        BEQ             ENDLN1              |; If so, branch
-        CMP.B           #0x7F,%D0           |; Was it <Delete>?
-        BEQ             DELETE1             |; If so, handle delete
-        CMP.B           #0x08,%D0           |; Was it <Backspace?
-        BEQ             DELETE1             |; If so, handle as delete
-        MOVE.B          %D0,load_filename(%A2)  |; Save in buffer
-        ADDQ.L          #1,%A2              |; Advance string pointer
-        BRA             GETFN1              |; Go back and get next character
-DELETE1 SUBQ.L          #1,%A2              |; Delete last character entered
-        BRA             GETFN1              |; Go back and get next character
+1:
+    lea     %pc@(LOAD_in),%a1               |; load file read vector
+    move.l  %a1,%a3@(V_INPTv)               |; set new input vector
+    bra     LAB_127D                        |; wait for Basic command, no "Ready"
 
-ENDLN1  MOVE.B          #0,load_filename(%A2)   |; Add terminating null to filename
-        LEA.L           VEC_IN2,%A0         |; Redirect input from aux. port.
-        MOVE.L          %A0,V_INPTv(%a3)
-        MOVE.B          #1,load_first(%A3)  |; Set load_first flag
+LOAD_exit:
+    move.l  #0,%a3@(file_id)
+    bsr     LAB_147A                        |; do "CLEAR"
+    bra     LAB_1274                        |; BASIC warm start entry
 
-|; Input routine will detect end of file and redirect input back to
-|; console port.
+LOAD_in:
+    movem.l %d1-%d2/%a1,%sp@-               |; save d1,d1,a1
 
-        RTS
+    moveq.l #1,%d0                          |; read one byte
+    lea     %a3@(filebyte),%a0              |; read buffer
+    move.l  #SysTrapFileRead,%d1            |; file read syscall
+    trap    #0                              |; 
 
- .endif
- */
+    tst.l   %d0                             |; check return status
+    bne     LOAD_eof                        |; exit on error
+    tst.l   %d1                             |; check bytes read
+    beq     LOAD_eof                        |; exit if done
+
+    lea     %a3@(filebyte),%a0              |; bytes read pointer
+    move.b  %a0@,%d0                        |; get byte read
+    movem.l %sp@+,%d1-%d2/%a1               |; restore registers
+    ori.b   #1,%ccr                         |; set carry flag for success
+    rts
+
+LOAD_eof:
+    moveq   #SysTrapFileClose,%d1           |; close file
+    trap    #0                              |;
+
+    move.l  #0,%a3@(file_id)                |; mark file not reading
+    lea     %pc@(VEC_IN),%a1                |; restore input vector
+    move.l  %a1,%a3@(V_INPTv)               |; 
+    moveq   #0,%d0                          |; clear return byte
+    movem.l %sp@+,%d1-%d2/%a1               |; restore registers
+    BSR     LAB_147A                        |; do CLEAR, flush stacks
+    BRA     LAB_1274                        |; BASIC warm start
+    
+get_filename:
+|;    beq     get_name                        |; if no, go use requester
+
+get_file:
+    move.l  %a1,%sp@-                       |; save title string pointer
+    subq.w  #1,%a5                          |; decrement execute pointer
+    bsr     LAB_GVAL                        |; get value from line
+    movea.l %sp@+,%a1                       |; restore title string pointer
+    tst.b   %a3@(Dtypef)                    |; test data type flag
+    bpl     LAB_TMER                        |; if not string, then error
+
+    movea.l %a3@(FAC1_m),%a2                |; get descriptor pointer
+    move.w  %a2@(4),%d1                     |; get string length
+|;    beq.s   get_name                        |; if null get do file request
+    beq     LAB_FCER                        |; if null then do error
+
+    movea.l %a2@,%a1                        |; get string pointer
+    move.w  %d1,%d0                         |; copy string length
+    addq.w  #1,%d1                          |; increment string length
+    bsr     LAB_2115                        |; make space d1 bytes long
+
+    move.b  #0,%a0@(%d0:w)                  |; null terminate new string
+    subq.w  #1,%d0                          |; decrement string length
+
+name_copy:
+    move.b  %a1@(%d0:w),%a0@(%d0:w)         |; copy a file name byte
+    dbf     %d0,name_copy                   |; loop until done
+
+    movea.l %a0,%a1                         |; copy new terminated name pointer
+    movea.l %a2,%a0                         |; copy filename descriptor pointer
+    bra     LAB_22B6                        |; pop string off descriptor stack
+                                            |; or from memory
+                                            |; returns d0=length, a0=pointer
+
+strLoadTitle:   .ascii "LOAD File\0"
+strSaveTitle:   .ascii "SAVE File\0"
+    .even
 
 
 /***********************************************************************************/
@@ -398,6 +451,8 @@ LAB_sizok:
 
     LEA     LAB_RSED(%pc),%a0               |; get pointer to value
     BSR     LAB_UFAC                        |; unpack memory (%a0) into FAC1
+
+    MOVE.L  #0,file_id(%a3)                 |; clear file read marker
 
     LEA     LAB_1274(%pc),%a0               |; get warm start vector
     MOVE.l  %a0,Wrmjpv(%a3)                 |; set warm start vector
@@ -883,6 +938,8 @@ LAB_1359:
 
 LAB_1374:
     CMP.b   #0x08,%d0                       |; compare with [BACKSPACE]
+    BEQ     LAB_134B                        |; go delete last character
+    CMP.b   #0x7e,%d0                       |; compare with [DELETE]
     BEQ     LAB_134B                        |; go delete last character
 
 LAB_1378:

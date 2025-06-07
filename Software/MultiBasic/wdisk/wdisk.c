@@ -5,7 +5,7 @@
 #include "wdisk.h"
 
 #ifdef DEBUG
-#include "../wboot/acia.h"
+#include "acia.h"
 #endif
 
 DSTATUS wrap030_disk_status(BYTE pdrive)

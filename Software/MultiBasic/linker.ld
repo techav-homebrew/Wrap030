@@ -126,8 +126,13 @@ SECTIONS{
     {
         MMUTABLEU = . ;
     } > ram
+    .kstack 0x00070000 (NOLOAD):
+    {
+        STACKCRASH = .;
+    }
     .kdiskbuf 0x00080000 (NOLOAD) :
     {
+        STACKINIT = . ;
         DISKBUFU = . ;
 
         uFSBuf0 = . ;
@@ -165,7 +170,7 @@ SECTIONS{
     } > ram
     .usermem 0x00800000 (NOLOAD) :
     {
-        STACKINIT = . ;
+        
         uMemStart = . ;
         
         uMemStart0 = . ;

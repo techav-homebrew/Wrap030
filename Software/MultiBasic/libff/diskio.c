@@ -13,7 +13,7 @@
 #include "../wdisk/wdisk.h"	// Wrap030-specific implementations
 
 #ifdef DEBUG
-#include "../wboot/acia.h"
+#include "../wdisk/acia.h"
 #endif
 
 /* Definitions of physical drive number for each drive */
