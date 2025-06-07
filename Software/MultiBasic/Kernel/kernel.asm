@@ -401,10 +401,6 @@ doSysTrapFileOpen:
 doSysTrapFileClose:
     movem.l %a0-%a6/%d0-%d7,%sp@-           |; save all before C call
 
-1:  btst    #1,acia1Com
-    beq.s   1b
-    move.b  #'#',acia1Dat
-
     lea     USERTABLE,%a0                   |; get user table pointer
     move.l  USERNUM,%d0                     |; 
     mulu    #utbl_size,%d0                  |;
@@ -433,7 +429,6 @@ doSysTrapFileRead:
     move.l  #0,%sp@-                        |; make space for bytes read
     move.l  %sp,%sp@-                       |; push parameter *br
     move.l  %d0,%sp@-                       |; push parameter btr
-    |;move.l  %a0,%sp@-                       |; push parameter *buff
 
     lea     USERTABLE,%a1                   |; get user table pointer
     move.l  USERNUM,%d0                     |;

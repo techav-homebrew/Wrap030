@@ -22,9 +22,9 @@
 #ifndef FF_DEFINED
 #define FF_DEFINED	5380	/* Revision ID */
 
-
+/*
 #define DEBUG 1
-
+*/
 
 #ifdef __cplusplus
 extern "C" {
