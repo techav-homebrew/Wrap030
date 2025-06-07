@@ -187,7 +187,7 @@ LOAD_exit:
     bra     LAB_1274                        |; BASIC warm start entry
 
 LOAD_in:
-    movem.l %d1-%d2/%a1,%sp@-               |; save d1,d1,a1
+    movem.l %d1-%d2/%a0-%a1,%sp@-           |; save d1,d1,a1
 
     moveq.l #1,%d0                          |; read one byte
     lea     %a3@(filebyte),%a0              |; read buffer
@@ -201,7 +201,7 @@ LOAD_in:
 
     lea     %a3@(filebyte),%a0              |; bytes read pointer
     move.b  %a0@,%d0                        |; get byte read
-    movem.l %sp@+,%d1-%d2/%a1               |; restore registers
+    movem.l %sp@+,%d1-%d2/%a1-%a0           |; restore registers
     ori.b   #1,%ccr                         |; set carry flag for success
     rts
 
@@ -213,7 +213,7 @@ LOAD_eof:
     lea     %pc@(VEC_IN),%a1                |; restore input vector
     move.l  %a1,%a3@(V_INPTv)               |; 
     moveq   #0,%d0                          |; clear return byte
-    movem.l %sp@+,%d1-%d2/%a1               |; restore registers
+    movem.l %sp@+,%d1-%d2/%a1-%a0           |; restore registers
     BSR     LAB_147A                        |; do CLEAR, flush stacks
     BRA     LAB_1274                        |; BASIC warm start
     
