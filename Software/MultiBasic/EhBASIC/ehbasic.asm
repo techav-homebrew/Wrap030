@@ -8764,6 +8764,8 @@ LAB_KEYT:
     dc.w    KEY_BITSET-TAB_STAR             |; BITSET
     dc.b    'B',4
     dc.w    KEY_BITCLR-TAB_STAR             |; BITCLR
+    dc.b    'C',1
+    dc.w    KEY_CAT-TAB_STAR                |; CAT
     dc.b    'T',2
     dc.w    KEY_TAB-TAB_STAR                |; TAB(
     dc.b    'E',2
@@ -8888,8 +8890,6 @@ LAB_KEYT:
     dc.w    KEY_MIDS-TAB_STAR               |; MID$(
     dc.b    'U',5
     dc.w    KEY_USINGS-TAB_STAR             |; USING$(
-    dc.b    'C',1
-    dc.w    KEY_CAT-TAB_STAR                |; CAT
 
 
 
