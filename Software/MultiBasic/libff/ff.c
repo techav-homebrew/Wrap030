@@ -246,7 +246,7 @@
 #endif
 #define LEAVE_FF(fs, res)	{ unlock_volume(fs, res); return res; }
 #elif DEBUG
-#define LEAVE_FF(fs, res) 	{ printStr("{"); printHexByte(res); printStrLn("}"); return res; }
+#define LEAVE_FF(fs, res) 	{ printStr("\tReturn: {"); printHexByte(res); printStrLn("}"); return res; }
 #else
 #define LEAVE_FF(fs, res)	return res
 #endif
@@ -502,6 +502,11 @@ void f_initialize()
 {
 	int i,j;
 	BYTE* p;
+
+#ifdef DEBUG
+	printStrLn("*F_INITIALIZE*");
+#endif
+
 	for(i=0; i<FF_VOLUMES; i++)
 	{
 		p = (BYTE*)&FatFileSystems;
@@ -1124,6 +1129,9 @@ static FRESULT move_window (	/* Returns FR_OK or FR_DISK_ERR */
 {
 	FRESULT res = FR_OK;
 
+#ifdef DEBUG
+	printStrLn("*MOVE_WINDOW*");
+#endif
 
 	if (sect != fs->winsect) {	/* Window offset changed? */
 #if !FF_FS_READONLY
@@ -1137,6 +1145,13 @@ static FRESULT move_window (	/* Returns FR_OK or FR_DISK_ERR */
 			fs->winsect = sect;
 		}
 	}
+
+	#ifdef DEBUG
+		printStr("*MOVE_WINDOW* returning: ");
+		printHexByte(res);
+		printStrLn("");
+	#endif
+
 	return res;
 }
 
@@ -1808,6 +1823,10 @@ static FRESULT dir_next (	/* FR_OK(0):succeeded, FR_NO_FILE:End of table, FR_DEN
 	DWORD ofs, clst;
 	FATFS *fs = dp->obj.fs;
 
+	#ifdef DEBUG
+		printStrLn("*DIR_NEXT*");
+	#endif
+
 
 	ofs = dp->dptr + SZDIRE;	/* Next entry */
 	if (ofs >= (DWORD)((FF_FS_EXFAT && fs->fs_type == FS_EXFAT) ? MAX_DIR_EX : MAX_DIR)) dp->sect = 0;	/* Disable it if the offset reached the max value */
@@ -1849,6 +1868,12 @@ static FRESULT dir_next (	/* FR_OK(0):succeeded, FR_NO_FILE:End of table, FR_DEN
 	}
 	dp->dptr = ofs;						/* Current entry */
 	dp->dir = fs->win + ofs % SS(fs);	/* Pointer to the entry in the win[] */
+
+	#ifdef DEBUG
+		printStr("*DIR_NEXT* returning ");
+		printHexByte(FR_OK);
+		printStrLn("");
+	#endif
 
 	return FR_OK;
 }
@@ -2376,6 +2401,10 @@ static FRESULT dir_read (
 	BYTE ord = 0xFF, sum = 0xFF;
 #endif
 
+#ifdef DEBUG
+	printStrLn("*DIR_READ*");
+#endif
+
 	while (dp->sect) {
 		res = move_window(fs, dp->sect);
 		if (res != FR_OK) break;
@@ -2430,7 +2459,18 @@ static FRESULT dir_read (
 		if (res != FR_OK) break;
 	}
 
+#ifdef DEBUG
+	printStrLn("*DIR_READ* exited while loop");
+#endif
+
 	if (res != FR_OK) dp->sect = 0;		/* Terminate the read operation on error or EOT */
+
+#ifdef DEBUG
+	printStr("*DIR_READ* returning: ");
+	printHexByte(res);
+	printStrLn("");
+#endif
+
 	return res;
 }
 
@@ -2451,6 +2491,10 @@ static FRESULT dir_find (	/* FR_OK(0):succeeded, !=0:error */
 	BYTE c;
 #if FF_USE_LFN
 	BYTE a, ord, sum;
+#endif
+
+#ifdef DEBUG
+	printStrLn("*DIR_FIND*");
 #endif
 
 	res = dir_sdi(dp, 0);			/* Rewind directory object */
@@ -2691,6 +2735,10 @@ static void get_fileinfo (
 	TCHAR c;
 #endif
 
+#ifdef DEBUG
+	printStrLn("*GET_FILEINFO*");
+#endif
+
 
 	fno->fname[0] = 0;			/* Invaidate file info */
 	if (dp->sect == 0) return;	/* Exit if read pointer has reached end of directory */
@@ -2807,6 +2855,10 @@ static void get_fileinfo (
 	fno->fsize = ld_dword(dp->dir + DIR_FileSize);		/* Size */
 	fno->ftime = ld_word(dp->dir + DIR_ModTime + 0);	/* Time */
 	fno->fdate = ld_word(dp->dir + DIR_ModTime + 2);	/* Date */
+
+	#ifdef DEBUG
+		printStrLn("*GET_FILEINFO* done");
+	#endif
 }
 
 #endif /* FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 */
@@ -3119,6 +3171,9 @@ static FRESULT follow_path (	/* FR_OK(0): successful, !=0: error code */
 	BYTE ns;
 	FATFS *fs = dp->obj.fs;
 
+#ifdef DEBUG
+	printStrLn("*FOLLOW_PATH*");
+#endif
 
 #if FF_FS_RPATH != 0
 	if (!IsSeparator(*path) && (FF_STR_VOLUME_ID != 2 || !IsTerminator(*path))) {	/* Without heading separator */
@@ -3792,6 +3847,10 @@ static FRESULT validate (	/* Returns FR_OK or FR_INVALID_OBJECT */
 {
 	FRESULT res = FR_INVALID_OBJECT;
 
+	#ifdef DEBUG
+		printStrLn("*VALIDATE*");
+	#endif
+
 
 	if (obj && obj->fs && obj->fs->fs_type && obj->id == obj->fs->id) {	/* Test if the object is valid */
 #if FF_FS_REENTRANT
@@ -3811,6 +3870,13 @@ static FRESULT validate (	/* Returns FR_OK or FR_INVALID_OBJECT */
 #endif
 	}
 	*rfs = (res == FR_OK) ? obj->fs : 0;	/* Return corresponding filesystem object if it is valid */
+
+	#ifdef DEBUG
+		printStr("*VALIDATE* returning: ");
+		printHexByte(res);
+		printStrLn("");
+	#endif
+
 	return res;
 }
 
@@ -3839,6 +3905,10 @@ FRESULT f_mount (
 	int vol;
 	FRESULT res;
 	const TCHAR *rp = path;
+
+	#ifdef DEBUG
+		printStrLn("*F_MOUNT*");
+	#endif
 
 
 	/* Get volume ID (logical drive number) */
@@ -4131,6 +4201,10 @@ FRESULT f_read (
 	FSIZE_t remain;
 	UINT rcnt, cc, csect;
 	BYTE *rbuff = (BYTE*)buff;
+
+	#ifdef DEBUG
+		printStrLn("*F_READ*");
+	#endif
 
 
 	*br = 0;	/* Clear read byte counter */
@@ -4656,6 +4730,10 @@ FRESULT f_lseek (
 	LBA_t dsc;
 #endif
 
+#ifdef DEBUG
+	printStrLn("*F_LSEEK*");
+#endif
+
 	res = validate(&fp->obj, &fs);		/* Check validity of the file object */
 	if (res == FR_OK) res = (FRESULT)fp->err;
 #if FF_FS_EXFAT && !FF_FS_READONLY
@@ -4813,6 +4891,9 @@ FRESULT f_opendir (
 	FATFS *fs;
 	DEF_NAMBUF
 
+#ifdef DEBUG
+	printStrLn("*F_OPENDIR*");
+#endif
 
 	if (!dp) return FR_INVALID_OBJECT;
 
@@ -4877,6 +4958,9 @@ FRESULT f_closedir (
 	FRESULT res;
 	FATFS *fs;
 
+#ifdef DEBUG
+	printStrLn("*F_CLOSEDIR*");
+#endif
 
 	res = validate(&dp->obj, &fs);	/* Check validity of the file object */
 	if (res == FR_OK) {
@@ -4909,6 +4993,10 @@ FRESULT f_readdir (
 	FATFS *fs;
 	DEF_NAMBUF
 
+#ifdef DEBUG
+	printStrLn("*F_READDIR*");
+#endif
+
 
 	res = validate(&dp->obj, &fs);	/* Check validity of the directory object */
 	if (res == FR_OK) {
@@ -4926,6 +5014,13 @@ FRESULT f_readdir (
 			FREE_NAMBUF();
 		}
 	}
+
+#ifdef DEBUG
+	printStr("*F_READDIR* returning: ");
+	printHexByte(res);
+	printStrLn("");
+#endif
+
 	LEAVE_FF(fs, res);
 }
 

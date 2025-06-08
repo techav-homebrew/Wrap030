@@ -176,6 +176,12 @@ SysTrapTbl:
     beq     doSysTrapFileClose
     cmp.b   #SysTrapFileRead,%d1
     beq     doSysTrapFileRead
+    cmp.b   #SysTrapDirOpen,%d1
+    beq     doSysTrapDirOpen
+    cmp.b   #SysTrapDirClose,%d1
+    beq     doSysTrapDirClose
+    cmp.b   #SysTrapDirRead,%d1
+    beq     doSysTrapDirRead
 
     rte
 
@@ -446,6 +452,75 @@ doSysTrapFileRead:
     movem.l %sp@+,%a1-%a6/%d2-%d7           |; restore registers
     bra     .RestoreExit
 
+|; syscall wrapper for libff wrapper function
+|; requires no parameters
+|; returns FRESULT in D0.L
+doSysTrapDirOpen:
+    movem.l %a0-%a6/%d2-%d7,%sp@-           |;
+
+    debugPrintStrI "doSysTrapDirOpen\r\n"
+
+    move.l  USERNUM,%sp@-                   |; push parameter User
+    bsr.l   openDir                         |; call open dir wrapper
+    addq.l  #4,%sp                          |; clear parameters
+
+    debugPrintStrI "doSysTrapDirOpen return: "
+    debugPrintHexByte %d0
+    debugPrintStrI "\r\n"
+
+    movem.l %sp@+,%a0-%a6/%d2-%d7           |;
+    bra     .RestoreExit
+
+|; syscall wrapper for libff wrapper function
+|; requires filename buffer pointer in A0.L
+|; returns FRESULT in D0.L
+|; returns same filename buffer pointer in A0.L
+doSysTrapDirClose:
+    movem.l %a1-%a6/%d2-%d7,%sp@-           |;
+
+    debugPrintStrI "doSysTrapDirClose\r\n"
+
+    move.l  %a0,%sp@-                       |; push parameter *fileName
+    move.l  USERNUM,%sp@-                   |; push parameter User
+    bsr.l   closeDir                        |; call read dir wrapper
+    addq.l  #4,%sp                          |; clear parameter User
+    move.l  %sp@+,%a0                       |; return filename pointer
+    movem.l %sp@+,%a1-%a6/%d2-%d7           |;
+    bra     .RestoreExit
+
+|; syscall wrapper for libff wrapper function
+|; requires no parameters
+|; returns FRESULT in D0.L
+doSysTrapDirRead:
+    movem.l %a1-%a6/%d2-%d7,%sp@-           |;
+
+    lea     USERTABLE,%a1                   |; get pointer to user table
+    move.l  USERNUM,%d2                     |;
+    mulu    #utbl_size,%d2                  |;
+    add.l   %d2,%a1                         |;
+    add.l   %a1@(utblMemPtr),%a0            |; add user memory base
+
+    debugPrintStrI "doSysTrapDirRead fileName pointer: "
+    move.l  %a0,%d7
+    debugPrintHexLong %d7
+    debugPrintStrI "\r\n"
+
+    move.l  %a0,%sp@-                       |; push parameter *filename
+    move.l  USERNUM,%sp@-                   |; push parameter User
+    bsr.l   readDir                         |; call close dir wrapper
+    addq.l  #4,%sp                          |; clear parameter User
+    move.l  %sp@+,%a0                       |; retrieve parameter *filename
+
+    lea     USERTABLE,%a1                   |; get pointer to user table
+    move.l  USERNUM,%d2                     |;
+    mulu    #utbl_size,%d2                  |;
+    add.l   %d2,%a1                         |;
+    sub.l   %a1@(utblMemPtr),%a0            |; sub user memory base
+
+    debugPrintStrI "doSysTrapDirRead done.\r\n"
+
+    movem.l %sp@+,%a1-%a6/%d2-%d7           |; 
+    bra     .RestoreExit                    |; 
 
     .even
 

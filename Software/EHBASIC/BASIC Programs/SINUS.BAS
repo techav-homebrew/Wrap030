@@ -1,3 +1,4 @@
+NEW
 5 D$="................................................................................"
 10 PRINT "Sinus (c) jbev 2022"
 90 W=80
@@ -13,6 +14,7 @@
 170 M=M-L
 180 R=R-(M+L)
 190 PRINT TAB(L);LEFT$(D$,M);"*";LEFT$(D$,R)
-240 IF INKEY$(1) <> "" THEN STOP
+240 REM "IF INKEY$(1) <> "" THEN STOP"
 260 IF I < .969 THEN 110
 270 I=0:T=0:GOTO 110
+

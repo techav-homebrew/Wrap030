@@ -17,7 +17,7 @@
 
 
 // #define FF_FS_MINIMIZE	0
-#define FF_FS_MINIMIZE  3
+#define FF_FS_MINIMIZE  1
 /* This option defines minimization level to remove some basic API functions.
 /
 /   0: Basic functions are fully enabled.

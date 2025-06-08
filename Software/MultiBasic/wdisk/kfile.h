@@ -8,4 +8,6 @@ FIL usrFile[8];
 
 FRESULT diskInit();
 
+DIR dirPtr[8];
+
 #endif

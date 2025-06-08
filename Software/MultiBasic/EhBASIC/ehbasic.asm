@@ -336,6 +336,59 @@ LAB_FILENAME:
         even
 */
 
+|; print disk directory listing
+LAB_DIR:
+    movem.l %a0/%d0-%d3,%sp@-               |; save registers
+    move.l  #SysTrapDirOpen,%d1             |; open root directory
+    trap    #0                              |;
+
+    cmpi.b  #0,%d0                          |; check return code
+    bne     DIR_ERR                         |; exit on error
+
+    moveq.l #0,%d2                          |; count files found
+
+1:  move.l  #SysTrapDirRead,%d1             |; set up trap
+    lea     %a3@(file_name),%a0             |; get filename pointer
+    trap    #0                              |; read next file from dir
+
+    cmpi.b  #0,%d0                          |; check return code
+    bne     DIR_END                         |; 
+    lea     %a3@(file_name),%a0             |; 
+    cmpi.b  #0,%a0@                         |; check filename first byte
+    beq     DIR_END                         |; 
+
+    bsr     LAB_18C3                        |; print file name
+
+    addq.l  #1,%d2                          |; increment file count
+    move.l  %d2,%d3                         |;
+    andi.l  #3,%d3                          |; 
+    cmpi.l  #3,%d3                          |;
+    beq.s   2f                              |; 
+    move.l  #0x09,%d0                       |; print tab
+    bsr     LAB_PRNA                        |;
+    bra     1b                              |; get next filename
+2:  bsr     LAB_CRLF                        |; print cr/lf
+    bra     1b                              |; get next filename
+
+DIR_ERR:
+    lea     %pc@(STR_DIR_ERR),%a0           |; print error string
+    bsr     LAB_18C3                        |;
+    
+DIR_END:
+    moveq.l #SysTrapDirClose,%d1            |; close directory
+    trap    #0                              |;
+    movem.l %sp@+,%a0/%d0-%d3               |; restore registers
+    rts
+|;    BSR     LAB_147A                        |; do CLEAR, flush stacks
+|;    BRA     LAB_1274                        |; BASIC warm start
+
+
+
+STR_DIR_ERR:
+    .ascii  "Error reading directory\r\n\0"
+    .even
+
+
 /***********************************************************************************/
 
 code_start:
@@ -8058,6 +8111,7 @@ RTS_025:
     .equ    TK_RIGHTS,  TK_LEFTS+1          |; 0xE2
     .equ    TK_MIDS,    TK_RIGHTS+1         |; 0xE3
     .equ    TK_USINGS,  TK_MIDS+1           |; 0xE4
+    .equ    TK_DIR,     TK_USINGS+1         |; 0xE5
 
 
 
@@ -8366,46 +8420,47 @@ TAB_HTHET:
 |; command vector table
 
 LAB_CTBL:
-    dc.w    LAB_END-LAB_CTBL                        |; END
-    dc.w    LAB_FOR-LAB_CTBL                        |; FOR
-    dc.w    LAB_NEXT-LAB_CTBL                        |; NEXT
-    dc.w    LAB_DATA-LAB_CTBL                        |; DATA
-    dc.w    LAB_INPUT-LAB_CTBL        |; INPUT
-    dc.w    LAB_DIM-LAB_CTBL                        |; DIM
-    dc.w    LAB_READ-LAB_CTBL                        |; READ
-    dc.w    LAB_LET-LAB_CTBL                        |; LET
-    dc.w    LAB_DEC-LAB_CTBL                        |; DEC    
-    dc.w    LAB_GOTO-LAB_CTBL                        |; GOTO
-    dc.w    LAB_RUN-LAB_CTBL                        |; RUN
-    dc.w    LAB_IF-LAB_CTBL                        |; IF
-    dc.w    LAB_RESTORE-LAB_CTBL        |; RESTORE
-    dc.w    LAB_GOSUB-LAB_CTBL        |; GOSUB
-    dc.w    LAB_RETURN-LAB_CTBL        |; RETURN
-    dc.w    LAB_REM-LAB_CTBL                        |; REM
-    dc.w    LAB_STOP-LAB_CTBL                        |; STOP
-    dc.w    LAB_ON-LAB_CTBL                        |; ON
-    dc.w    LAB_NULL-LAB_CTBL                        |; NULL
-    dc.w    LAB_INC-LAB_CTBL                        |; INC    
-    dc.w    LAB_WAIT-LAB_CTBL                        |; WAIT
-    dc.w    LAB_LOAD-LAB_CTBL                        |; LOAD
-    dc.w    LAB_SAVE-LAB_CTBL                        |; SAVE
-    dc.w    LAB_DEF-LAB_CTBL                        |; DEF
-    dc.w    LAB_POKE-LAB_CTBL                        |; POKE
-    dc.w    LAB_DOKE-LAB_CTBL                        |; DOKE
-    dc.w    LAB_LOKE-LAB_CTBL                        |; LOKE
-    dc.w    LAB_CALL-LAB_CTBL                        |; CALL
-    dc.w    LAB_DO-LAB_CTBL                        |; DO    
-    dc.w    LAB_LOOP-LAB_CTBL                        |; LOOP
-    dc.w    LAB_PRINT-LAB_CTBL        |; PRINT
-    dc.w    LAB_CONT-LAB_CTBL                        |; CONT
-    dc.w    LAB_LIST-LAB_CTBL                        |; LIST
-    dc.w    LAB_CLEAR-LAB_CTBL        |; CLEAR
-    dc.w    LAB_NEW-LAB_CTBL                        |; NEW
-    dc.w    LAB_WDTH-LAB_CTBL                        |; WIDTH
-    dc.w    LAB_GET-LAB_CTBL                        |; GET
-    dc.w    LAB_SWAP-LAB_CTBL                        |; SWAP
-    dc.w    LAB_BITSET-LAB_CTBL        |; BITSET
-    dc.w    LAB_BITCLR-LAB_CTBL        |; BITCLR
+    dc.w    LAB_END-LAB_CTBL                |; END
+    dc.w    LAB_FOR-LAB_CTBL                |; FOR
+    dc.w    LAB_NEXT-LAB_CTBL               |; NEXT
+    dc.w    LAB_DATA-LAB_CTBL               |; DATA
+    dc.w    LAB_INPUT-LAB_CTBL              |; INPUT
+    dc.w    LAB_DIM-LAB_CTBL                |; DIM
+    dc.w    LAB_READ-LAB_CTBL               |; READ
+    dc.w    LAB_LET-LAB_CTBL                |; LET
+    dc.w    LAB_DEC-LAB_CTBL                |; DEC    
+    dc.w    LAB_GOTO-LAB_CTBL               |; GOTO
+    dc.w    LAB_RUN-LAB_CTBL                |; RUN
+    dc.w    LAB_IF-LAB_CTBL                 |; IF
+    dc.w    LAB_RESTORE-LAB_CTBL            |; RESTORE
+    dc.w    LAB_GOSUB-LAB_CTBL              |; GOSUB
+    dc.w    LAB_RETURN-LAB_CTBL             |; RETURN
+    dc.w    LAB_REM-LAB_CTBL                |; REM
+    dc.w    LAB_STOP-LAB_CTBL               |; STOP
+    dc.w    LAB_ON-LAB_CTBL                 |; ON
+    dc.w    LAB_NULL-LAB_CTBL               |; NULL
+    dc.w    LAB_INC-LAB_CTBL                |; INC    
+    dc.w    LAB_WAIT-LAB_CTBL               |; WAIT
+    dc.w    LAB_LOAD-LAB_CTBL               |; LOAD
+    dc.w    LAB_SAVE-LAB_CTBL               |; SAVE
+    dc.w    LAB_DEF-LAB_CTBL                |; DEF
+    dc.w    LAB_POKE-LAB_CTBL               |; POKE
+    dc.w    LAB_DOKE-LAB_CTBL               |; DOKE
+    dc.w    LAB_LOKE-LAB_CTBL               |; LOKE
+    dc.w    LAB_CALL-LAB_CTBL               |; CALL
+    dc.w    LAB_DO-LAB_CTBL                 |; DO    
+    dc.w    LAB_LOOP-LAB_CTBL               |; LOOP
+    dc.w    LAB_PRINT-LAB_CTBL              |; PRINT
+    dc.w    LAB_CONT-LAB_CTBL               |; CONT
+    dc.w    LAB_LIST-LAB_CTBL               |; LIST
+    dc.w    LAB_CLEAR-LAB_CTBL              |; CLEAR
+    dc.w    LAB_NEW-LAB_CTBL                |; NEW
+    dc.w    LAB_WDTH-LAB_CTBL               |; WIDTH
+    dc.w    LAB_GET-LAB_CTBL                |; GET
+    dc.w    LAB_SWAP-LAB_CTBL               |; SWAP
+    dc.w    LAB_BITSET-LAB_CTBL             |; BITSET
+    dc.w    LAB_BITCLR-LAB_CTBL             |; BITCLR
+    dc.w    LAB_DIR-LAB_CTBL                |; DIR
 
 
 
@@ -8625,209 +8680,211 @@ TAB_CHRT:
 
 LAB_KEYT:
     dc.b    'E',1
-    dc.w    KEY_END-TAB_STAR                        |; END
+    dc.w    KEY_END-TAB_STAR                |; END
     dc.b    'F',1
-    dc.w    KEY_FOR-TAB_STAR                        |; FOR
+    dc.w    KEY_FOR-TAB_STAR                |; FOR
     dc.b    'N',2
-    dc.w    KEY_NEXT-TAB_STAR                        |; NEXT
+    dc.w    KEY_NEXT-TAB_STAR               |; NEXT
     dc.b    'D',2
-    dc.w    KEY_DATA-TAB_STAR                        |; DATA
+    dc.w    KEY_DATA-TAB_STAR               |; DATA
     dc.b    'I',3
-    dc.w    KEY_INPUT-TAB_STAR        |; INPUT
+    dc.w    KEY_INPUT-TAB_STAR              |; INPUT
     dc.b    'D',1
-    dc.w    KEY_DIM-TAB_STAR                        |; DIM
+    dc.w    KEY_DIM-TAB_STAR                |; DIM
     dc.b    'R',2
-    dc.w    KEY_READ-TAB_STAR                        |; READ
+    dc.w    KEY_READ-TAB_STAR               |; READ
     dc.b    'L',1
-    dc.w    KEY_LET-TAB_STAR                        |; LET
+    dc.w    KEY_LET-TAB_STAR                |; LET
     dc.b    'D',1
-    dc.w    KEY_DEC-TAB_STAR                        |; DEC
+    dc.w    KEY_DEC-TAB_STAR                |; DEC
     dc.b    'G',2
-    dc.w    KEY_GOTO-TAB_STAR                        |; GOTO
+    dc.w    KEY_GOTO-TAB_STAR               |; GOTO
     dc.b    'R',1
-    dc.w    KEY_RUN-TAB_STAR                        |; RUN
+    dc.w    KEY_RUN-TAB_STAR                |; RUN
     dc.b    'I',0
-    dc.w    KEY_IF-TAB_STAR                        |; IF
+    dc.w    KEY_IF-TAB_STAR                 |; IF
     dc.b    'R',5
-    dc.w    KEY_RESTORE-TAB_STAR        |; RESTORE
+    dc.w    KEY_RESTORE-TAB_STAR            |; RESTORE
     dc.b    'G',3
-    dc.w    KEY_GOSUB-TAB_STAR        |; GOSUB
+    dc.w    KEY_GOSUB-TAB_STAR              |; GOSUB
     dc.b    'R',4
-    dc.w    KEY_RETURN-TAB_STAR        |; RETURN
+    dc.w    KEY_RETURN-TAB_STAR             |; RETURN
     dc.b    'R',1
-    dc.w    KEY_REM-TAB_STAR                        |; REM
+    dc.w    KEY_REM-TAB_STAR                |; REM
     dc.b    'S',2
-    dc.w    KEY_STOP-TAB_STAR                        |; STOP
+    dc.w    KEY_STOP-TAB_STAR               |; STOP
     dc.b    'O',0
-    dc.w    KEY_ON-TAB_STAR                        |; ON
+    dc.w    KEY_ON-TAB_STAR                 |; ON
     dc.b    'N',2
-    dc.w    KEY_NULL-TAB_STAR                        |; NULL
+    dc.w    KEY_NULL-TAB_STAR               |; NULL
     dc.b    'I',1
-    dc.w    KEY_INC-TAB_STAR                        |; INC
+    dc.w    KEY_INC-TAB_STAR                |; INC
     dc.b    'W',2
-    dc.w    KEY_WAIT-TAB_STAR                        |; WAIT
+    dc.w    KEY_WAIT-TAB_STAR               |; WAIT
     dc.b    'L',2
-    dc.w    KEY_LOAD-TAB_STAR                        |; LOAD
+    dc.w    KEY_LOAD-TAB_STAR               |; LOAD
     dc.b    'S',2
-    dc.w    KEY_SAVE-TAB_STAR                        |; SAVE
+    dc.w    KEY_SAVE-TAB_STAR               |; SAVE
     dc.b    'D',1
-    dc.w    KEY_DEF-TAB_STAR                        |; DEF
+    dc.w    KEY_DEF-TAB_STAR                |; DEF
     dc.b    'P',2
-    dc.w    KEY_POKE-TAB_STAR                        |; POKE
+    dc.w    KEY_POKE-TAB_STAR               |; POKE
     dc.b    'D',2
-    dc.w    KEY_DOKE-TAB_STAR                        |; DOKE
+    dc.w    KEY_DOKE-TAB_STAR               |; DOKE
     dc.b    'L',2
-    dc.w    KEY_LOKE-TAB_STAR                        |; LOKE
+    dc.w    KEY_LOKE-TAB_STAR               |; LOKE
     dc.b    'C',2
-    dc.w    KEY_CALL-TAB_STAR                        |; CALL
+    dc.w    KEY_CALL-TAB_STAR               |; CALL
     dc.b    'D',0
-    dc.w    KEY_DO-TAB_STAR                        |; DO
+    dc.w    KEY_DO-TAB_STAR                 |; DO
     dc.b    'L',2
-    dc.w    KEY_LOOP-TAB_STAR                        |; LOOP
+    dc.w    KEY_LOOP-TAB_STAR               |; LOOP
     dc.b    'P',3
-    dc.w    KEY_PRINT-TAB_STAR        |; PRINT
+    dc.w    KEY_PRINT-TAB_STAR              |; PRINT
     dc.b    'C',2
-    dc.w    KEY_CONT-TAB_STAR                        |; CONT
+    dc.w    KEY_CONT-TAB_STAR               |; CONT
     dc.b    'L',2
-    dc.w    KEY_LIST-TAB_STAR                        |; LIST
+    dc.w    KEY_LIST-TAB_STAR               |; LIST
     dc.b    'C',3
-    dc.w    KEY_CLEAR-TAB_STAR        |; CLEAR
+    dc.w    KEY_CLEAR-TAB_STAR              |; CLEAR
     dc.b    'N',1
-    dc.w    KEY_NEW-TAB_STAR                        |; NEW
+    dc.w    KEY_NEW-TAB_STAR                |; NEW
     dc.b    'W',3
-    dc.w    KEY_WIDTH-TAB_STAR        |; WIDTH
+    dc.w    KEY_WIDTH-TAB_STAR              |; WIDTH
     dc.b    'G',1
-    dc.w    KEY_GET-TAB_STAR                        |; GET
+    dc.w    KEY_GET-TAB_STAR                |; GET
     dc.b    'S',2
-    dc.w    KEY_SWAP-TAB_STAR                        |; SWAP
+    dc.w    KEY_SWAP-TAB_STAR               |; SWAP
     dc.b    'B',4
-    dc.w    KEY_BITSET-TAB_STAR        |; BITSET
+    dc.w    KEY_BITSET-TAB_STAR             |; BITSET
     dc.b    'B',4
-    dc.w    KEY_BITCLR-TAB_STAR        |; BITCLR
+    dc.w    KEY_BITCLR-TAB_STAR             |; BITCLR
     dc.b    'T',2
-    dc.w    KEY_TAB-TAB_STAR                        |; TAB(
+    dc.w    KEY_TAB-TAB_STAR                |; TAB(
     dc.b    'E',2
-    dc.w    KEY_ELSE-TAB_STAR                        |; ELSE
+    dc.w    KEY_ELSE-TAB_STAR               |; ELSE
     dc.b    'T',0
-    dc.w    KEY_TO-TAB_STAR                        |; TO
+    dc.w    KEY_TO-TAB_STAR                 |; TO
     dc.b    'F',0
-    dc.w    KEY_FN-TAB_STAR                        |; FN
+    dc.w    KEY_FN-TAB_STAR                 |; FN
     dc.b    'S',2
-    dc.w    KEY_SPC-TAB_STAR                        |; SPC(
+    dc.w    KEY_SPC-TAB_STAR                |; SPC(
     dc.b    'T',2
-    dc.w    KEY_THEN-TAB_STAR                        |; THEN
+    dc.w    KEY_THEN-TAB_STAR               |; THEN
     dc.b    'N',1
-    dc.w    KEY_NOT-TAB_STAR                        |; NOT
+    dc.w    KEY_NOT-TAB_STAR                |; NOT
     dc.b    'S',2
-    dc.w    KEY_STEP-TAB_STAR                        |; STEP
+    dc.w    KEY_STEP-TAB_STAR               |; STEP
     dc.b    'U',3
-    dc.w    KEY_UNTIL-TAB_STAR        |; UNTIL
+    dc.w    KEY_UNTIL-TAB_STAR              |; UNTIL
     dc.b    'W',3
-    dc.w    KEY_WHILE-TAB_STAR        |; WHILE
+    dc.w    KEY_WHILE-TAB_STAR              |; WHILE
 
     dc.b    '+',-1
-    dc.w    KEY_PLUS-TAB_STAR                        |; +
+    dc.w    KEY_PLUS-TAB_STAR               |; +
     dc.b    '-',-1
-    dc.w    KEY_MINUS-TAB_STAR        |; -
+    dc.w    KEY_MINUS-TAB_STAR              |; -
     dc.b    '*',-1
-    dc.w    KEY_MULT-TAB_STAR                        |; *
+    dc.w    KEY_MULT-TAB_STAR               |; *
     dc.b    '/',-1
-    dc.w    KEY_DIV-TAB_STAR                        |; /
+    dc.w    KEY_DIV-TAB_STAR                |; /
     dc.b    '^',-1
-    dc.w    KEY_POWER-TAB_STAR        |; ^
+    dc.w    KEY_POWER-TAB_STAR              |; ^
     dc.b    'A',1
-    dc.w    KEY_AND-TAB_STAR                        |; AND
+    dc.w    KEY_AND-TAB_STAR                |; AND
     dc.b    'E',1
-    dc.w    KEY_EOR-TAB_STAR                        |; EOR
+    dc.w    KEY_EOR-TAB_STAR                |; EOR
     dc.b    'O',0
-    dc.w    KEY_OR-TAB_STAR                        |; OR
+    dc.w    KEY_OR-TAB_STAR                 |; OR
     dc.b    '>',0
-    dc.w    KEY_RSHIFT-TAB_STAR        |; >>
+    dc.w    KEY_RSHIFT-TAB_STAR             |; >>
     dc.b    '<',0
-    dc.w    KEY_LSHIFT-TAB_STAR        |; <<
+    dc.w    KEY_LSHIFT-TAB_STAR             |; <<
     dc.b    '>',-1
-    dc.w    KEY_GT-TAB_STAR                        |; >
+    dc.w    KEY_GT-TAB_STAR                 |; >
     dc.b    '=',-1
-    dc.w    KEY_EQUAL-TAB_STAR        |; =
+    dc.w    KEY_EQUAL-TAB_STAR              |; =
     dc.b    '<',-1
-    dc.w    KEY_LT-TAB_STAR                        |; <
+    dc.w    KEY_LT-TAB_STAR                 |; <
 
     dc.b    'S',2
-    dc.w    KEY_SGN-TAB_STAR                        |; SGN(
+    dc.w    KEY_SGN-TAB_STAR                |; SGN(
     dc.b    'I',2
-    dc.w    KEY_INT-TAB_STAR                        |; INT(
+    dc.w    KEY_INT-TAB_STAR                |; INT(
     dc.b    'A',2
-    dc.w    KEY_ABS-TAB_STAR                        |; ABS(
+    dc.w    KEY_ABS-TAB_STAR                |; ABS(
     dc.b    'U',2
-    dc.w    KEY_USR-TAB_STAR                        |; USR(
+    dc.w    KEY_USR-TAB_STAR                |; USR(
     dc.b    'F',2
-    dc.w    KEY_FRE-TAB_STAR                        |; FRE(
+    dc.w    KEY_FRE-TAB_STAR                |; FRE(
     dc.b    'P',2
-    dc.w    KEY_POS-TAB_STAR                        |; POS(
+    dc.w    KEY_POS-TAB_STAR                |; POS(
     dc.b    'S',2
-    dc.w    KEY_SQR-TAB_STAR                        |; SQR(
+    dc.w    KEY_SQR-TAB_STAR                |; SQR(
     dc.b    'R',2
-    dc.w    KEY_RND-TAB_STAR                        |; RND(
+    dc.w    KEY_RND-TAB_STAR                |; RND(
     dc.b    'L',2
-    dc.w    KEY_LOG-TAB_STAR                        |; LOG(
+    dc.w    KEY_LOG-TAB_STAR                |; LOG(
     dc.b    'E',2
-    dc.w    KEY_EXP-TAB_STAR                        |; EXP(
+    dc.w    KEY_EXP-TAB_STAR                |; EXP(
     dc.b    'C',2
-    dc.w    KEY_COS-TAB_STAR                        |; COS(
+    dc.w    KEY_COS-TAB_STAR                |; COS(
     dc.b    'S',2
-    dc.w    KEY_SIN-TAB_STAR                        |; SIN(
+    dc.w    KEY_SIN-TAB_STAR                |; SIN(
     dc.b    'T',2
-    dc.w    KEY_TAN-TAB_STAR                        |; TAN(
+    dc.w    KEY_TAN-TAB_STAR                |; TAN(
     dc.b    'A',2
-    dc.w    KEY_ATN-TAB_STAR                        |; ATN(
+    dc.w    KEY_ATN-TAB_STAR                |; ATN(
     dc.b    'P',3
-    dc.w    KEY_PEEK-TAB_STAR                        |; PEEK(
+    dc.w    KEY_PEEK-TAB_STAR               |; PEEK(
     dc.b    'D',3
-    dc.w    KEY_DEEK-TAB_STAR                        |; DEEK(
+    dc.w    KEY_DEEK-TAB_STAR               |; DEEK(
     dc.b    'L',3
-    dc.w    KEY_LEEK-TAB_STAR                        |; LEEK(
+    dc.w    KEY_LEEK-TAB_STAR               |; LEEK(
     dc.b    'L',2
-    dc.w    KEY_LEN-TAB_STAR                        |; LEN(
+    dc.w    KEY_LEN-TAB_STAR                |; LEN(
     dc.b    'S',3
-    dc.w    KEY_STRS-TAB_STAR                        |; STR$(
+    dc.w    KEY_STRS-TAB_STAR               |; STR$(
     dc.b    'V',2
-    dc.w    KEY_VAL-TAB_STAR                        |; VAL(
+    dc.w    KEY_VAL-TAB_STAR                |; VAL(
     dc.b    'A',2
-    dc.w    KEY_ASC-TAB_STAR                        |; ASC(
+    dc.w    KEY_ASC-TAB_STAR                |; ASC(
     dc.b    'U',5
-    dc.w    KEY_UCASES-TAB_STAR        |; UCASE$(
+    dc.w    KEY_UCASES-TAB_STAR             |; UCASE$(
     dc.b    'L',5
-    dc.w    KEY_LCASES-TAB_STAR        |; LCASE$(
+    dc.w    KEY_LCASES-TAB_STAR             |; LCASE$(
     dc.b    'C',3
-    dc.w    KEY_CHRS-TAB_STAR                        |; CHR$(
+    dc.w    KEY_CHRS-TAB_STAR               |; CHR$(
     dc.b    'H',3
-    dc.w    KEY_HEXS-TAB_STAR                        |; HEX$(
+    dc.w    KEY_HEXS-TAB_STAR               |; HEX$(
     dc.b    'B',3
-    dc.w    KEY_BINS-TAB_STAR                        |; BIN$(
+    dc.w    KEY_BINS-TAB_STAR               |; BIN$(
     dc.b    'B',5
-    dc.w    KEY_BITTST-TAB_STAR        |; BITTST(
+    dc.w    KEY_BITTST-TAB_STAR             |; BITTST(
     dc.b    'M',2
-    dc.w    KEY_MAX-TAB_STAR                        |; MAX(
+    dc.w    KEY_MAX-TAB_STAR                |; MAX(
     dc.b    'M',2
-    dc.w    KEY_MIN-TAB_STAR                        |; MIN(
+    dc.w    KEY_MIN-TAB_STAR                |; MIN(
     dc.b    'R',5
-    dc.w    KEY_RAM-TAB_STAR                        |; RAMBASE
+    dc.w    KEY_RAM-TAB_STAR                |; RAMBASE
     dc.b    'P',0
-    dc.w    KEY_PI-TAB_STAR                        |; PI
+    dc.w    KEY_PI-TAB_STAR                 |; PI
     dc.b    'T',3
-    dc.w    KEY_TWOPI-TAB_STAR        |; TWOPI
+    dc.w    KEY_TWOPI-TAB_STAR              |; TWOPI
     dc.b    'V',5
-    dc.w    KEY_VPTR-TAB_STAR                        |; VARPTR(
+    dc.w    KEY_VPTR-TAB_STAR               |; VARPTR(
     dc.b    'S',3
-    dc.w    KEY_SADD-TAB_STAR                        |; SADD(
+    dc.w    KEY_SADD-TAB_STAR               |; SADD(
     dc.b    'L',4
-    dc.w    KEY_LEFTS-TAB_STAR        |; LEFT$(
+    dc.w    KEY_LEFTS-TAB_STAR              |; LEFT$(
     dc.b    'R',5
-    dc.w    KEY_RIGHTS-TAB_STAR        |; RIGHT$(
+    dc.w    KEY_RIGHTS-TAB_STAR             |; RIGHT$(
     dc.b    'M',3
-    dc.w    KEY_MIDS-TAB_STAR                        |; MID$(
+    dc.w    KEY_MIDS-TAB_STAR               |; MID$(
     dc.b    'U',5
-    dc.w    KEY_USINGS-TAB_STAR        |; USING$(
+    dc.w    KEY_USINGS-TAB_STAR             |; USING$(
+    dc.b    'D',1
+    dc.w    KEY_DIR-TAB_STAR                |; DIR
 
 
 
@@ -8898,56 +8955,56 @@ LAB_NI:  .ascii  "Not implemented\0"
 
 TAB_STAR:
 KEY_MULT:
-    dc.b TK_MULT,0x00                |; *
+    dc.b TK_MULT,0x00                       |; *
 TAB_PLUS:
 KEY_PLUS:
-    dc.b TK_PLUS,0x00                |; +
+    dc.b TK_PLUS,0x00                       |; +
 TAB_MNUS:
 KEY_MINUS:
-    dc.b TK_MINUS,0x00                |; -
+    dc.b TK_MINUS,0x00                      |; -
 TAB_SLAS:
 KEY_DIV:
-    dc.b TK_DIV,0x00                |; /
+    dc.b TK_DIV,0x00                        |; /
 TAB_LESS:
 KEY_LSHIFT:
-    dc.b    '<',TK_LSHIFT                        |; <<
+    dc.b    '<',TK_LSHIFT                   |; <<
 KEY_LT:
-    dc.b TK_LT                    |; <
+    dc.b TK_LT                              |; <
     dc.b    0x00
 TAB_EQUL:
 KEY_EQUAL:
-    dc.b TK_EQUAL,0x00                |; =
+    dc.b TK_EQUAL,0x00                      |; =
 TAB_MORE:
 KEY_RSHIFT:
-    dc.b    '>',TK_RSHIFT                        |; >>
+    dc.b    '>',TK_RSHIFT                   |; >>
 KEY_GT:
-    dc.b TK_GT                    |; >
+    dc.b TK_GT                              |; >
     dc.b    0x00
 TAB_QEST:
-    dc.b TK_PRINT,0x00                |; ?
+    dc.b TK_PRINT,0x00                      |; ?
 TAB_ASCA:
 KEY_ABS:
-    .ascii  "BS("                        |;  ABS(
+    .ascii  "BS("                           |;  ABS(
     dc.b    TK_ABS
 KEY_AND:
-    .ascii  "ND"                        |;  AND
+    .ascii  "ND"                            |;  AND
     dc.b    TK_AND
 KEY_ASC:
-    .ascii  "SC("                        |;  ASC(
+    .ascii  "SC("                           |;  ASC(
     dc.b    TK_ASC
 KEY_ATN:
-    .ascii  "TN("                        |;  ATN(
+    .ascii  "TN("                           |;  ATN(
     dc.b    TK_ATN
     dc.b    0x00
 TAB_ASCB:
 KEY_BINS:
-    .ascii  "IN$("                        |;  BIN$(
+    .ascii  "IN$("                          |;  BIN$(
     dc.b    TK_BINS
 KEY_BITCLR:
-    .ascii  "ITCLR"                        |;  BITCLR
+    .ascii  "ITCLR"                         |;  BITCLR
     dc.b    TK_BITCLR
 KEY_BITSET:
-    .ascii  "ITSET"                        |;  BITSET
+    .ascii  "ITSET"                         |;  BITSET
     dc.b    TK_BITSET
 KEY_BITTST:
     .ascii  "ITTST("                        |;  BITTST(
@@ -8955,93 +9012,96 @@ KEY_BITTST:
     dc.b    0x00
 TAB_ASCC:
 KEY_CALL:
-    .ascii  "ALL"                        |;  CALL
+    .ascii  "ALL"                           |;  CALL
     dc.b    TK_CALL
 KEY_CHRS:
-    .ascii  "HR$("                        |;  CHR$(
+    .ascii  "HR$("                          |;  CHR$(
     dc.b    TK_CHRS
 KEY_CLEAR:
-    .ascii  "LEAR"                        |;  CLEAR
+    .ascii  "LEAR"                          |;  CLEAR
     dc.b    TK_CLEAR
 KEY_CONT:
-    .ascii  "ONT"                        |;  CONT
+    .ascii  "ONT"                           |;  CONT
     dc.b    TK_CONT
 KEY_COS:
-    .ascii  "OS("                        |;  COS(
+    .ascii  "OS("                           |;  COS(
     dc.b    TK_COS
     dc.b    0x00
 TAB_ASCD:
 KEY_DATA:
-    .ascii  "ATA"                        |;  DATA
+    .ascii  "ATA"                           |;  DATA
     dc.b    TK_DATA
 KEY_DEC:
-    .ascii  "EC"                        |;  DEC
+    .ascii  "EC"                            |;  DEC
     dc.b    TK_DEC
 KEY_DEEK:
-    .ascii  "EEK("                        |;  DEEK(
+    .ascii  "EEK("                          |;  DEEK(
     dc.b    TK_DEEK
 KEY_DEF:
-    .ascii  "EF"                        |;  DEF
+    .ascii  "EF"                            |;  DEF
     dc.b    TK_DEF
 KEY_DIM:
-    .ascii  "IM"                        |;  DIM
+    .ascii  "IM"                            |;  DIM
     dc.b    TK_DIM
+KEY_DIR:
+    .ascii  "IR"                            |; DIR
+    dc.b    TK_DIR
 KEY_DOKE:
-    .ascii  "OKE"                        |;  DOKE
+    .ascii  "OKE"                           |;  DOKE
     dc.b    TK_DOKE
 KEY_DO:
-    dc.b    'O',TK_DO                |; DO
+    dc.b    'O',TK_DO                       |; DO
     dc.b    0x00
 TAB_ASCE:
 KEY_ELSE:
-    .ascii  "LSE"                        |;  ELSE
+    .ascii  "LSE"                           |;  ELSE
     dc.b    TK_ELSE
 KEY_END:
-    .ascii  "ND"                        |;  END
+    .ascii  "ND"                            |;  END
     dc.b    TK_END
 KEY_EOR:
-    .ascii  "OR"                        |;  EOR
+    .ascii  "OR"                            |;  EOR
     dc.b    TK_EOR
 KEY_EXP:
-    .ascii  "XP("                        |;  EXP(
+    .ascii  "XP("                           |;  EXP(
     dc.b    TK_EXP
     dc.b    0x00
 TAB_ASCF:
 KEY_FOR:
-    .ascii  "OR"                        |;  FOR
+    .ascii  "OR"                            |;  FOR
     dc.b    TK_FOR
 KEY_FN:
-    dc.b    'N',TK_FN                |; FN
+    dc.b    'N',TK_FN                       |; FN
 KEY_FRE:
-    .ascii  "RE("                        |;  FRE(
+    .ascii  "RE("                           |;  FRE(
     dc.b    TK_FRE
     dc.b    0x00
 TAB_ASCG:
 KEY_GET:
-    .ascii  "ET"                        |;  GET
+    .ascii  "ET"                            |;  GET
     dc.b    TK_GET
 KEY_GOTO:
-    .ascii  "OTO"                        |;  GOTO
+    .ascii  "OTO"                           |;  GOTO
     dc.b    TK_GOTO
 KEY_GOSUB:
-    .ascii  "OSUB"                        |;  GOSUB
+    .ascii  "OSUB"                          |;  GOSUB
     dc.b    TK_GOSUB
     dc.b    0x00
 TAB_ASCH:
 KEY_HEXS:
-    .ascii  "EX$("                      |; HEX$(
+    .ascii  "EX$("                          |; HEX$(
     dc.b    TK_HEXS,0x00        
 TAB_ASCI:
 KEY_IF:
-    dc.b    'F',TK_IF                |; IF
+    dc.b    'F',TK_IF                       |; IF
 KEY_INC:
-    .ascii  "NC"                        |;  INC
+    .ascii  "NC"                            |;  INC
     dc.b    TK_INC
 KEY_INPUT:
-    .ascii  "NPUT"                        |;  INPUT
+    .ascii  "NPUT"                          |;  INPUT
     dc.b    TK_INPUT
 KEY_INT:
-    .ascii  "NT("                        |;  INT(
+    .ascii  "NT("                           |;  INT(
     dc.b    TK_INT
     dc.b    0x00
 TAB_ASCL:
@@ -9049,78 +9109,78 @@ KEY_LCASES:
     .ascii  "CASE$("                        |;  LCASE$(
     dc.b    TK_LCASES
 KEY_LEEK:
-    .ascii  "EEK("                        |;  LEEK(
+    .ascii  "EEK("                          |;  LEEK(
     dc.b    TK_LEEK
 KEY_LEFTS:
-    .ascii  "EFT$("                        |;  LEFT$(
+    .ascii  "EFT$("                         |;  LEFT$(
     dc.b    TK_LEFTS
 KEY_LEN:
-    .ascii  "EN("                        |;  LEN(
+    .ascii  "EN("                           |;  LEN(
     dc.b    TK_LEN
 KEY_LET:
-    .ascii  "ET"                        |;  LET
+    .ascii  "ET"                            |;  LET
     dc.b    TK_LET
 KEY_LIST:
-    .ascii  "IST"                        |;  LIST
+    .ascii  "IST"                           |;  LIST
     dc.b    TK_LIST
 KEY_LOAD:
-    .ascii  "OAD"                        |;  LOAD
+    .ascii  "OAD"                           |;  LOAD
     dc.b    TK_LOAD
 KEY_LOG:
-    .ascii  "OG("                        |;  LOG(
+    .ascii  "OG("                           |;  LOG(
     dc.b    TK_LOG
 KEY_LOKE:
-    .ascii  "OKE"                        |;  LOKE
+    .ascii  "OKE"                           |;  LOKE
     dc.b    TK_LOKE
 KEY_LOOP:
-    .ascii  "OOP"                        |;  LOOP
+    .ascii  "OOP"                           |;  LOOP
     dc.b    TK_LOOP
     dc.b    0x00
 TAB_ASCM:
 KEY_MAX:
-    .ascii  "AX("                        |;  MAX(
+    .ascii  "AX("                           |;  MAX(
     dc.b    TK_MAX
 KEY_MIDS:
-    .ascii  "ID$("                        |;  MID$(
+    .ascii  "ID$("                          |;  MID$(
     dc.b    TK_MIDS
 KEY_MIN:
-    .ascii  "IN("                        |;  MIN(
+    .ascii  "IN("                           |;  MIN(
     dc.b    TK_MIN
     dc.b    0x00
 TAB_ASCN:
 KEY_NEW:
-    .ascii  "EW"                        |;  NEW
+    .ascii  "EW"                            |;  NEW
     dc.b    TK_NEW
 KEY_NEXT:
-    .ascii  "EXT"                        |;  NEXT
+    .ascii  "EXT"                           |;  NEXT
     dc.b    TK_NEXT
 KEY_NOT:
-    .ascii  "OT"                        |;  NOT
+    .ascii  "OT"                            |;  NOT
     dc.b    TK_NOT
 KEY_NULL:
-    .ascii  "ULL"                        |;  NULL
+    .ascii  "ULL"                           |;  NULL
     dc.b    TK_NULL
     dc.b    0x00
 TAB_ASCO:
 KEY_ON:
-    dc.b    'N',TK_ON                |; ON
+    dc.b    'N',TK_ON                       |; ON
 KEY_OR:
-    dc.b    'R',TK_OR                |; OR
+    dc.b    'R',TK_OR                       |; OR
     dc.b    0x00
 TAB_ASCP:
 KEY_PEEK:
-    .ascii  "EEK("                        |;  PEEK(
+    .ascii  "EEK("                          |;  PEEK(
     dc.b    TK_PEEK
 KEY_PI:
-    dc.b    'I',TK_PI                |; PI
+    dc.b    'I',TK_PI                       |; PI
 KEY_POKE:
-    .ascii  "OKE"                        |;  POKE
+    .ascii  "OKE"                           |;  POKE
     dc.b    TK_POKE
 KEY_POS:
-    .ascii  "OS("                        |;  POS(
+    .ascii  "OS("                           |;  POS(
     dc.b    TK_POS
 KEY_PRINT:
-    .ascii  "RINT"                        |;  PRINT
+    .ascii  "RINT"                          |;  PRINT
     dc.b    TK_PRINT
     dc.b    0x00
 TAB_ASCR:
@@ -9128,73 +9188,73 @@ KEY_RAM:
     .ascii  "AMBASE"                        |;  RAMBASE
     dc.b    TK_RAM
 KEY_READ:
-    .ascii  "EAD"                        |;  READ
+    .ascii  "EAD"                           |;  READ
     dc.b    TK_READ
 KEY_REM:
-    .ascii  "EM"                        |;  REM
+    .ascii  "EM"                            |;  REM
     dc.b    TK_REM
 KEY_RESTORE:
     .ascii  "ESTORE"                        |;  RESTORE
     dc.b    TK_RESTORE
 KEY_RETURN:
-    .ascii  "ETURN"                        |;  RETURN
+    .ascii  "ETURN"                         |;  RETURN
     dc.b    TK_RETURN
 KEY_RIGHTS:
     .ascii  "IGHT$("                        |;  RIGHT$(
     dc.b    TK_RIGHTS
 KEY_RND:
-    .ascii  "ND("                        |;  RND(
+    .ascii  "ND("                           |;  RND(
     dc.b    TK_RND
 KEY_RUN:
-    .ascii  "UN"                        |;  RUN
+    .ascii  "UN"                            |;  RUN
     dc.b    TK_RUN
     dc.b    0x00
 TAB_ASCS:
 KEY_SADD:
-    .ascii  "ADD("                        |;  SADD(
+    .ascii  "ADD("                          |;  SADD(
     dc.b    TK_SADD
 KEY_SAVE:
-    .ascii  "AVE"                        |;  SAVE
+    .ascii  "AVE"                           |;  SAVE
     dc.b    TK_SAVE
 KEY_SGN:
-    .ascii  "GN("                        |;  SGN(
+    .ascii  "GN("                           |;  SGN(
     dc.b    TK_SGN
 KEY_SIN:
-    .ascii  "IN("                        |;  SIN(
+    .ascii  "IN("                           |;  SIN(
     dc.b    TK_SIN
 KEY_SPC:
-    .ascii  "PC("                        |;  SPC(
+    .ascii  "PC("                           |;  SPC(
     dc.b    TK_SPC
 KEY_SQR:
-    .ascii  "QR("                        |;  SQR(
+    .ascii  "QR("                           |;  SQR(
     dc.b    TK_SQR
 KEY_STEP:
-    .ascii  "TEP"                        |;  STEP
+    .ascii  "TEP"                           |;  STEP
     dc.b    TK_STEP
 KEY_STOP:
-    .ascii  "TOP"                        |;  STOP
+    .ascii  "TOP"                           |;  STOP
     dc.b    TK_STOP
 KEY_STRS:
-    .ascii  "TR$("                        |;  STR$(
+    .ascii  "TR$("                          |;  STR$(
     dc.b    TK_STRS
 KEY_SWAP:
-    .ascii  "WAP"                        |;  SWAP
+    .ascii  "WAP"                           |;  SWAP
     dc.b    TK_SWAP
     dc.b    0x00
 TAB_ASCT:
 KEY_TAB:
-    .ascii  "AB("                        |;  TAB(
+    .ascii  "AB("                           |;  TAB(
     dc.b    TK_TAB
 KEY_TAN:
-    .ascii  "AN("                        |;  TAN
+    .ascii  "AN("                           |;  TAN
     dc.b    TK_TAN
 KEY_THEN:
-    .ascii  "HEN"                        |;  THEN
+    .ascii  "HEN"                           |;  THEN
     dc.b    TK_THEN
 KEY_TO:
-    dc.b    'O',TK_TO                |; TO
+    dc.b    'O',TK_TO                       |; TO
 KEY_TWOPI:
-    .ascii  "WOPI"                        |;  TWOPI
+    .ascii  "WOPI"                          |;  TWOPI
     dc.b    TK_TWOPI
     dc.b    0x00
 TAB_ASCU:
@@ -9202,18 +9262,18 @@ KEY_UCASES:
     .ascii  "CASE$("                        |;  UCASE$(
     dc.b    TK_UCASES
 KEY_UNTIL:
-    .ascii  "NTIL"                        |;  UNTIL
+    .ascii  "NTIL"                          |;  UNTIL
     dc.b    TK_UNTIL
 KEY_USINGS:
     .ascii  "SING$("                        |;  USING$(
     dc.b    TK_USINGS
 KEY_USR:
-    .ascii  "SR("                        |;  USR(
+    .ascii  "SR("                           |;  USR(
     dc.b    TK_USR
     dc.b    0x00
 TAB_ASCV:
 KEY_VAL:
-    .ascii  "AL("                        |;  VAL(
+    .ascii  "AL("                           |;  VAL(
     dc.b    TK_VAL
 KEY_VPTR:
     .ascii  "ARPTR("                        |;  VARPTR(
@@ -9221,18 +9281,18 @@ KEY_VPTR:
     dc.b    0x00
 TAB_ASCW:
 KEY_WAIT:
-    .ascii  "AIT"                        |;  WAIT
+    .ascii  "AIT"                           |;  WAIT
     dc.b    TK_WAIT
 KEY_WHILE:
-    .ascii  "HILE"                        |;  WHILE
+    .ascii  "HILE"                          |;  WHILE
     dc.b    TK_WHILE
 KEY_WIDTH:
-    .ascii  "IDTH"                        |;  WIDTH
+    .ascii  "IDTH"                          |;  WIDTH
     dc.b    TK_WIDTH
     dc.b    0x00
 TAB_POWR:
 KEY_POWER:
-    dc.b    TK_POWER,0x00                        |; ^
+    dc.b    TK_POWER,0x00                   |; ^
 
 
 
