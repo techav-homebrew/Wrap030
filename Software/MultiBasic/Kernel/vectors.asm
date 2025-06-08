@@ -268,7 +268,9 @@ exceptPrintEnd:
     unlk    %a6                             |; unlink stack frame
     andi.w  #0x78ff,%sr                     |; reenable interrupts
     move.b  #0,KTIMER                       |; reset timer
-    rte                                     |; return from exception
+|;    bra     NextUser
+    bra     RestoreUserContext
+|;    rte                                     |; return from exception
 
 exceptTrap:
     exceptPrintStrS strInstr
@@ -311,12 +313,14 @@ exceptFault:
     andi.w  #0xCEFF,%a6@(14)                |; clear retry bits
 
 exceptUserReset:
+    exceptPrintStrS strResetUser
     lea     USERTABLE,%a0                   |; get pointer to user table
     move.l  USERNUM,%d0                     |; get current user number
     bsr     kUserTblInit                    |; reinitialize current user
 
-    lea     NextUser,%a0                    |; update return address to switch
-    move.l  %a0,%a6@(6)                     |;  to next user on rte
+|;    lea     NextUser,%a0                    |; update return address to switch
+|;    move.l  %a0,%a6@(6)                     |;  to next user on rte
+
     bra     exceptPrintEnd                  |; done
 
 SysPreempt:
@@ -416,6 +420,7 @@ strBufO:    .ascii  "\r\n  Output Buf: 0x\0"
 strBufI:    .ascii  " Input Buf: 0x\0"
 strBAddr:   .ascii  "\r\n  Stage B Addr: 0x\0"
 strFoot:    .ascii  "\r\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n\r\n> \0"
+strResetUser:   .ascii  "\r\n  Resetting user\0"
 
 |; table of friendly name strings for all vectors
 vectorNames:
