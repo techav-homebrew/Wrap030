@@ -458,15 +458,15 @@ doSysTrapFileRead:
 doSysTrapDirOpen:
     movem.l %a0-%a6/%d2-%d7,%sp@-           |;
 
-    debugPrintStrI "doSysTrapDirOpen\r\n"
+|;    debugPrintStrI "doSysTrapDirOpen\r\n"
 
     move.l  USERNUM,%sp@-                   |; push parameter User
     bsr.l   openDir                         |; call open dir wrapper
     addq.l  #4,%sp                          |; clear parameters
 
-    debugPrintStrI "doSysTrapDirOpen return: "
-    debugPrintHexByte %d0
-    debugPrintStrI "\r\n"
+|;    debugPrintStrI "doSysTrapDirOpen return: "
+|;    debugPrintHexByte %d0
+|;    debugPrintStrI "\r\n"
 
     movem.l %sp@+,%a0-%a6/%d2-%d7           |;
     bra     .RestoreExit
@@ -478,7 +478,7 @@ doSysTrapDirOpen:
 doSysTrapDirClose:
     movem.l %a1-%a6/%d2-%d7,%sp@-           |;
 
-    debugPrintStrI "doSysTrapDirClose\r\n"
+|;    debugPrintStrI "doSysTrapDirClose\r\n"
 
     move.l  %a0,%sp@-                       |; push parameter *fileName
     move.l  USERNUM,%sp@-                   |; push parameter User
@@ -500,10 +500,10 @@ doSysTrapDirRead:
     add.l   %d2,%a1                         |;
     add.l   %a1@(utblMemPtr),%a0            |; add user memory base
 
-    debugPrintStrI "doSysTrapDirRead fileName pointer: "
-    move.l  %a0,%d7
-    debugPrintHexLong %d7
-    debugPrintStrI "\r\n"
+|;    debugPrintStrI "doSysTrapDirRead fileName pointer: "
+|;    move.l  %a0,%d7
+|;    debugPrintHexLong %d7
+|;    debugPrintStrI "\r\n"
 
     move.l  %a0,%sp@-                       |; push parameter *filename
     move.l  USERNUM,%sp@-                   |; push parameter User
@@ -517,7 +517,7 @@ doSysTrapDirRead:
     add.l   %d2,%a1                         |;
     sub.l   %a1@(utblMemPtr),%a0            |; sub user memory base
 
-    debugPrintStrI "doSysTrapDirRead done.\r\n"
+|;    debugPrintStrI "doSysTrapDirRead done.\r\n"
 
     movem.l %sp@+,%a1-%a6/%d2-%d7           |; 
     bra     .RestoreExit                    |; 

@@ -337,44 +337,49 @@ LAB_FILENAME:
 */
 
 |; print disk directory listing
-LAB_DIR:
+LAB_CAT:
     movem.l %a0/%d0-%d3,%sp@-               |; save registers
     move.l  #SysTrapDirOpen,%d1             |; open root directory
     trap    #0                              |;
 
     cmpi.b  #0,%d0                          |; check return code
-    bne     DIR_ERR                         |; exit on error
+    bne     CAT_ERR                         |; exit on error
 
     moveq.l #0,%d2                          |; count files found
 
-1:  move.l  #SysTrapDirRead,%d1             |; set up trap
+1:  move.l  %d2,%d3                         |; copy file count
+    andi.l  #3,%d3                          |; check last two bits
+    beq.s   2f                              |; if null, then CRLF
+    move.b  #0x09,%d0                       |; print tab
+    move.l  %d2,%sp@-                       |; save count
+    bsr     LAB_PRNA                        |;
+    bra     3f                              |;
+2:  move.l  %d2,%sp@-                       |; save count
+    bsr     LAB_CRLF                        |; print CRLF
+    
+3:  move.l  %sp@+,%d2                       |; restore count
+    move.l  #SysTrapDirRead,%d1             |; set up trap
     lea     %a3@(file_name),%a0             |; get filename pointer
     trap    #0                              |; read next file from dir
 
     cmpi.b  #0,%d0                          |; check return code
-    bne     DIR_END                         |; 
+    bne     CAT_END                         |; 
     lea     %a3@(file_name),%a0             |; 
     cmpi.b  #0,%a0@                         |; check filename first byte
-    beq     DIR_END                         |; 
+    beq     CAT_END                         |; 
 
+    move.l  %d2,%sp@-                       |; save counter
     bsr     LAB_18C3                        |; print file name
+    move.l  %sp@+,%d2                       |; restore counter
 
     addq.l  #1,%d2                          |; increment file count
-    move.l  %d2,%d3                         |;
-    andi.l  #3,%d3                          |; 
-    cmpi.l  #3,%d3                          |;
-    beq.s   2f                              |; 
-    move.l  #0x09,%d0                       |; print tab
-    bsr     LAB_PRNA                        |;
-    bra     1b                              |; get next filename
-2:  bsr     LAB_CRLF                        |; print cr/lf
     bra     1b                              |; get next filename
 
-DIR_ERR:
-    lea     %pc@(STR_DIR_ERR),%a0           |; print error string
+CAT_ERR:
+    lea     %pc@(STR_CAT_ERR),%a0           |; print error string
     bsr     LAB_18C3                        |;
     
-DIR_END:
+CAT_END:
     moveq.l #SysTrapDirClose,%d1            |; close directory
     trap    #0                              |;
     movem.l %sp@+,%a0/%d0-%d3               |; restore registers
@@ -384,7 +389,7 @@ DIR_END:
 
 
 
-STR_DIR_ERR:
+STR_CAT_ERR:
     .ascii  "Error reading directory\r\n\0"
     .even
 
@@ -7695,30 +7700,30 @@ LAB_TWOPI:
 |; starting with "$" and "%" respectively
 
 LAB_2887:
-    MOVEM.l %d1-%d5,-(%sp)                        |; save registers
-    MOVE.L  #0x00,%d1                        |; clear temp accumulator
-    MOVE.l  %d1,%d3                |; set mantissa decimal exponent count
-    MOVE.l  %d1,%d4                |; clear decimal exponent
-    MOVE.b  %d1,FAC1_s(%a3)        |; clear sign byte
-    MOVE.b  %d1,Dtypef(%a3)        |; set float data type
-    MOVE.b  %d1,expneg(%a3)        |; clear exponent sign
+    MOVEM.l %d1-%d5,-(%sp)                  |; save registers
+    MOVE.L  #0x00,%d1                       |; clear temp accumulator
+    MOVE.l  %d1,%d3                         |; set mantissa decimal exponent count
+    MOVE.l  %d1,%d4                         |; clear decimal exponent
+    MOVE.b  %d1,FAC1_s(%a3)                 |; clear sign byte
+    MOVE.b  %d1,Dtypef(%a3)                 |; set float data type
+    MOVE.b  %d1,expneg(%a3)                 |; clear exponent sign
     BSR     LAB_GBYT                        |; get first byte back
     BCS     LAB_28FE                        |; go get floating if 1st character numeric
 
     CMP.b   #'-',%d0                        |; or is it -ve number
     BNE     LAB_289A                        |; branch if not
 
-    MOVE.b  #0xFF,FAC1_s(%a3)        |; set sign byte
+    MOVE.b  #0xFF,FAC1_s(%a3)               |; set sign byte
     BRA     LAB_289C                        |; now go scan & check for hex/bin/int
 
 LAB_289A:
-                            |; first character wasn't numeric or -
+                                            |; first character wasn't numeric or -
     CMP.b   #'+',%d0                        |; compare with '+'
     BNE     LAB_289D                        |; branch if not '+' (go check for '.'/hex/binary
-                            |; /integer)
+                                            |; /integer)
     
 LAB_289C:
-                            |; was "+" or "-" to start, so get next character
+                                            |; was "+" or "-" to start, so get next character
     BSR     LAB_IGBY                        |; increment & scan memory
     BCS     LAB_28FE                        |; branch if numeric character
 
@@ -7726,7 +7731,7 @@ LAB_289D:
     CMP.b   #'.',%d0                        |; else compare with '.'
     BEQ     LAB_2904                        |; branch if '.'
 
-                            |; code here for hex/binary/integer numbers
+                                            |; code here for hex/binary/integer numbers
     CMP.b   #'$',%d0                        |; compare with '$'
     BEQ     LAB_CHEX                        |; branch if '$'
 
@@ -7740,63 +7745,63 @@ LAB_28FD:
     BCC     LAB_2902                        |; exit loop if not a digit
 
 LAB_28FE:
-    BSR     d1x10                |; multiply %d1 by 10 and add character
+    BSR     d1x10                           |; multiply %d1 by 10 and add character
     BCC     LAB_28FD                        |; loop for more if no overflow
 
 LAB_28FF:
-                            |; overflowed mantissa, count 10s exponent
-    ADDQ.l  #1,%d3                |; increment mantissa decimal exponent count
+                                            |; overflowed mantissa, count 10s exponent
+    ADDQ.l  #1,%d3                          |; increment mantissa decimal exponent count
     BSR     LAB_IGBY                        |; get next character
     BCS     LAB_28FF                        |; loop while numeric character
 
-                            |; done overflow, now flush fraction or do E
+                                            |; done overflow, now flush fraction or do E
     CMP.b   #'.',%d0                        |; else compare with '.'
     BNE     LAB_2901                        |; branch if not '.'
 
 LAB_2900:
-                            |; flush remaining fraction digits
+                                            |; flush remaining fraction digits
     BSR     LAB_IGBY                        |; get next character
     BCS     LAB_2900                        |; loop while numeric character
 
 LAB_2901:
-                            |; done number, only (possible) exponent remains
+                                            |; done number, only (possible) exponent remains
     CMP.b   #'E',%d0                        |; else compare with 'E'
     BNE     LAB_2Y01                        |; if not 'E' all done, go evaluate
 
-                            |; process exponent
+                                            |; process exponent
     BSR     LAB_IGBY                        |; get next character
     BCS     LAB_2X04                        |; branch if digit
 
     CMP.b   #'-',%d0                        |; or is it -ve number
     BEQ     LAB_2X01                        |; branch if so
 
-    CMP.b   #TK_MINUS,%d0        |; or is it -ve number
+    CMP.b   #TK_MINUS,%d0                   |; or is it -ve number
     BNE     LAB_2X02                        |; branch if not
 
 LAB_2X01:
-    MOVE.b  #0xFF,expneg(%a3)        |; set exponent sign
+    MOVE.b  #0xFF,expneg(%a3)               |; set exponent sign
     BRA     LAB_2X03                        |; now go scan & check exponent
 
 LAB_2X02:
     CMP.b   #'+',%d0                        |; or is it +ve number
     BEQ     LAB_2X03                        |; branch if so
 
-    CMP.b   #TK_PLUS,%d0                        |; or is it +ve number
+    CMP.b   #TK_PLUS,%d0                    |; or is it +ve number
     BNE     LAB_SNER                        |; wasn't - + TK_MINUS TK_PLUS or |; so do error
 
 LAB_2X03:
     BSR     LAB_IGBY                        |; get next character
     BCC     LAB_2Y01                        |; if not digit all done, go evaluate
 LAB_2X04:
-    MULU    #10,%d4                        |; multiply decimal exponent by 10
-    AND.l   #0xFF,%d0                        |; mask character
+    MULU    #10,%d4                         |; multiply decimal exponent by 10
+    AND.l   #0xFF,%d0                       |; mask character
     SUB.b   #'0',%d0                        |; convert to value
-    ADD.l   %d0,%d4                |; add to decimal exponent
-    CMP.b   #48,%d4                        |; compare with decimal exponent limit+10
+    ADD.l   %d0,%d4                         |; add to decimal exponent
+    CMP.b   #48,%d4                         |; compare with decimal exponent limit+10
     BLE     LAB_2X03                        |; loop if no overflow/underflow
 
 LAB_2X05:
-                            |; exponent value has overflowed
+                                            |; exponent value has overflowed
     BSR     LAB_IGBY                        |; get next character
     BCS     LAB_2X05                        |; loop while numeric digit
 
@@ -7809,67 +7814,67 @@ LAB_2902:
     BRA     LAB_2901                        |; branch if not '.' (go check/do 'E')
 
 LAB_2903:
-    SUBQ.l  #1,%d3                |; decrement mantissa decimal exponent
+    SUBQ.l  #1,%d3                          |; decrement mantissa decimal exponent
 LAB_2904:
-                            |; was dp so get fraction part
+                                            |; was dp so get fraction part
     BSR     LAB_IGBY                        |; get next character
     BCC     LAB_2901                        |; exit loop if not a digit (go check/do 'E')
 
-    BSR     d1x10                |; multiply %d1 by 10 and add character
+    BSR     d1x10                           |; multiply %d1 by 10 and add character
     BCC     LAB_2903                        |; loop for more if no overflow
 
     BRA     LAB_2900                        |; else go flush remaining fraction part
 
 LAB_2Y01:
-                            |; now evaluate result
-    TST.b   expneg(%a3)                        |; test exponent sign
+                                            |; now evaluate result
+    TST.b   expneg(%a3)                     |; test exponent sign
     BPL     LAB_2Y02                        |; branch if sign positive
 
-    NEG.l   %d4                |; negate decimal exponent
+    NEG.l   %d4                             |; negate decimal exponent
 LAB_2Y02:
-    ADD.l   %d3,%d4                |; add mantissa decimal exponent
-    MOVE.L  #32,%d3                        |; set up max binary exponent
-    TST.l   %d1                |; test mantissa
+    ADD.l   %d3,%d4                         |; add mantissa decimal exponent
+    MOVE.L  #32,%d3                         |; set up max binary exponent
+    TST.l   %d1                             |; test mantissa
     BEQ     LAB_rtn0                        |; if mantissa=0 return 0
 
     BMI     LAB_2Y04                        |; branch if already mormalised
 
-    SUBQ.l  #1,%d3                |; decrement bianry exponent for DBMI loop
+    SUBQ.l  #1,%d3                          |; decrement bianry exponent for DBMI loop
 LAB_2Y03:
-    ADD.l   %d1,%d1                |; shift mantissa
-    DBMI    %d3,LAB_2Y03                        |; decrement & loop if not normalised
+    ADD.l   %d1,%d1                         |; shift mantissa
+    DBMI    %d3,LAB_2Y03                    |; decrement & loop if not normalised
 
-                            |; ensure not too big or small
+                                            |; ensure not too big or small
 LAB_2Y04:
-    CMP.l   #38,%d4                        |; compare decimal exponent with max exponent
+    CMP.l   #38,%d4                         |; compare decimal exponent with max exponent
     BGT     LAB_OFER                        |; if greater do overflow error and warm start
 
     CMP.l   #-38,%d4                        |; compare decimal exponent with min exponent
     BLT     LAB_ret0                        |; if less just return zero
 
-    NEG.l   %d4                |; negate decimal exponent to go right way
-    MULS    #6,%d4                |; 6 bytes per entry
-    MOVE.l  %a0,-(%sp)                        |; save register
-    LEA     LAB_P_10(%pc),%a0        |; point to table
-    MOVE.b  (%a0,%d4.w),FAC2_e(%a3)    |; copy exponent for multiply
-    MOVE.l  2(%a0,%d4.w),FAC2_m(%a3)    |; copy table mantissa
-    MOVE.l  (%sp)+,%a0                        |; restore register
+    NEG.l   %d4                             |; negate decimal exponent to go right way
+    MULS    #6,%d4                          |; 6 bytes per entry
+    MOVE.l  %a0,-(%sp)                      |; save register
+    LEA     LAB_P_10(%pc),%a0               |; point to table
+    MOVE.b  (%a0,%d4.w),FAC2_e(%a3)         |; copy exponent for multiply
+    MOVE.l  2(%a0,%d4.w),FAC2_m(%a3)        |; copy table mantissa
+    MOVE.l  (%sp)+,%a0                      |; restore register
 
-    EORI.b  #0x80,%d3                        |; normalise input exponent
-    MOVE.l  %d1,FAC1_m(%a3)        |; save input mantissa
-    MOVE.b  %d3,FAC1_e(%a3)        |; save input exponent
-    MOVE.b  FAC1_s(%a3),FAC_sc(%a3)    |; set sign as sign compare
+    EORI.b  #0x80,%d3                       |; normalise input exponent
+    MOVE.l  %d1,FAC1_m(%a3)                 |; save input mantissa
+    MOVE.b  %d3,FAC1_e(%a3)                 |; save input exponent
+    MOVE.b  FAC1_s(%a3),FAC_sc(%a3)         |; set sign as sign compare
 
-    MOVEM.l (%sp)+,%d1-%d5                        |; restore registers
-    BRA     LAB_MULTIPLY        |; go multiply input by table
+    MOVEM.l (%sp)+,%d1-%d5                  |; restore registers
+    BRA     LAB_MULTIPLY                    |; go multiply input by table
 
 LAB_ret0:
-    MOVE.L  #0,%d1                |; clear mantissa
+    MOVE.L  #0,%d1                          |; clear mantissa
 LAB_rtn0:
-    MOVE.l  %d1,%d3                |; clear exponent
-    MOVE.b  %d3,FAC1_e(%a3)        |; save exponent
-    MOVE.l  %d1,FAC1_m(%a3)        |; save mantissa
-    MOVEM.l (%sp)+,%d1-%d5                        |; restore registers
+    MOVE.l  %d1,%d3                         |; clear exponent
+    MOVE.b  %d3,FAC1_e(%a3)                 |; save exponent
+    MOVE.l  %d1,FAC1_m(%a3)                 |; save mantissa
+    MOVEM.l (%sp)+,%d1-%d5                  |; restore registers
     RTS     
 /***********************************************************************************/
 #
@@ -8050,68 +8055,68 @@ RTS_025:
     .equ    TK_SWAP,    TK_GET+1            |; 0xA5
     .equ    TK_BITSET,  TK_SWAP+1           |; 0xA6
     .equ    TK_BITCLR,  TK_BITSET+1         |; 0xA7
-    .equ    TK_TAB,     TK_BITCLR+1         |; 0xA8
-    .equ    TK_ELSE,    TK_TAB+1            |; 0xA9
-    .equ    TK_TO,      TK_ELSE+1           |; 0xAA
-    .equ    TK_FN,      TK_TO+1             |; 0xAB
-    .equ    TK_SPC,     TK_FN+1             |; 0xAC
-    .equ    TK_THEN,    TK_SPC+1            |; 0xAD
-    .equ    TK_NOT,     TK_THEN+1           |; 0xAE
-    .equ    TK_STEP,    TK_NOT+1            |; 0xAF
-    .equ    TK_UNTIL,   TK_STEP+1           |; 0xB0
-    .equ    TK_WHILE,   TK_UNTIL+1          |; 0xB1
-    .equ    TK_PLUS,    TK_WHILE+1          |; 0xB2
-    .equ    TK_MINUS,   TK_PLUS+1           |; 0xB3
-    .equ    TK_MULT,    TK_MINUS+1          |; 0xB4
-    .equ    TK_DIV,     TK_MULT+1           |; 0xB5
-    .equ    TK_POWER,   TK_DIV+1            |; 0xB6
-    .equ    TK_AND,     TK_POWER+1          |; 0xB7
-    .equ    TK_EOR,     TK_AND+1            |; 0xB8
-    .equ    TK_OR,      TK_EOR+1            |; 0xB9
-    .equ    TK_RSHIFT,  TK_OR+1             |; 0xBA
-    .equ    TK_LSHIFT,  TK_RSHIFT+1         |; 0xBB
-    .equ    TK_GT,      TK_LSHIFT+1         |; 0xBC
-    .equ    TK_EQUAL,   TK_GT+1             |; 0xBD
-    .equ    TK_LT,      TK_EQUAL+1          |; 0xBE
-    .equ    TK_SGN,     TK_LT+1             |; 0xBF
-    .equ    TK_INT,     TK_SGN+1            |; 0xC0
-    .equ    TK_ABS,     TK_INT+1            |; 0xC1
-    .equ    TK_USR,     TK_ABS+1            |; 0xC2
-    .equ    TK_FRE,     TK_USR+1            |; 0xC3
-    .equ    TK_POS,     TK_FRE+1            |; 0xC4
-    .equ    TK_SQR,     TK_POS+1            |; 0xC5
-    .equ    TK_RND,     TK_SQR+1            |; 0xC6
-    .equ    TK_LOG,     TK_RND+1            |; 0xC7
-    .equ    TK_EXP,     TK_LOG+1            |; 0xC8
-    .equ    TK_COS,     TK_EXP+1            |; 0xC9
-    .equ    TK_SIN,     TK_COS+1            |; 0xCA
-    .equ    TK_TAN,     TK_SIN+1            |; 0xCB
-    .equ    TK_ATN,     TK_TAN+1            |; 0xCC
-    .equ    TK_PEEK,    TK_ATN+1            |; 0xCD
-    .equ    TK_DEEK,    TK_PEEK+1           |; 0xCE
-    .equ    TK_LEEK,    TK_DEEK+1           |; 0xCF
-    .equ    TK_LEN,     TK_LEEK+1           |; 0xD0
-    .equ    TK_STRS,    TK_LEN+1            |; 0xD1
-    .equ    TK_VAL,     TK_STRS+1           |; 0xD2
-    .equ    TK_ASC,     TK_VAL+1            |; 0xD3
-    .equ    TK_UCASES,  TK_ASC+1            |; 0xD4
-    .equ    TK_LCASES,  TK_UCASES+1         |; 0xD5
-    .equ    TK_CHRS,    TK_LCASES+1         |; 0xD6
-    .equ    TK_HEXS,    TK_CHRS+1           |; 0xD7
-    .equ    TK_BINS,    TK_HEXS+1           |; 0xD8
-    .equ    TK_BITTST,  TK_BINS+1           |; 0xD9
-    .equ    TK_MAX,     TK_BITTST+1         |; 0xDA
-    .equ    TK_MIN,     TK_MAX+1            |; 0xDB
-    .equ    TK_RAM,     TK_MIN+1            |; 0xDC
-    .equ    TK_PI,      TK_RAM+1            |; 0xDD
-    .equ    TK_TWOPI,   TK_PI+1             |; 0xDE
-    .equ    TK_VPTR,    TK_TWOPI+1          |; 0xDF
-    .equ    TK_SADD,    TK_VPTR+1           |; 0xE0
-    .equ    TK_LEFTS,   TK_SADD+1           |; 0xE1
-    .equ    TK_RIGHTS,  TK_LEFTS+1          |; 0xE2
-    .equ    TK_MIDS,    TK_RIGHTS+1         |; 0xE3
-    .equ    TK_USINGS,  TK_MIDS+1           |; 0xE4
-    .equ    TK_DIR,     TK_USINGS+1         |; 0xE5
+    .equ    TK_CAT,     TK_BITCLR+1         |; 0xA8
+    .equ    TK_TAB,     TK_CAT+1            |; 0xA9
+    .equ    TK_ELSE,    TK_TAB+1            |; 0xAA
+    .equ    TK_TO,      TK_ELSE+1           |; 0xAB
+    .equ    TK_FN,      TK_TO+1             |; 0xAC
+    .equ    TK_SPC,     TK_FN+1             |; 0xAD
+    .equ    TK_THEN,    TK_SPC+1            |; 0xAE
+    .equ    TK_NOT,     TK_THEN+1           |; 0xAF
+    .equ    TK_STEP,    TK_NOT+1            |; 0xB0
+    .equ    TK_UNTIL,   TK_STEP+1           |; 0xB1
+    .equ    TK_WHILE,   TK_UNTIL+1          |; 0xB2
+    .equ    TK_PLUS,    TK_WHILE+1          |; 0xB3
+    .equ    TK_MINUS,   TK_PLUS+1           |; 0xB4
+    .equ    TK_MULT,    TK_MINUS+1          |; 0xB5
+    .equ    TK_DIV,     TK_MULT+1           |; 0xB6
+    .equ    TK_POWER,   TK_DIV+1            |; 0xB7
+    .equ    TK_AND,     TK_POWER+1          |; 0xB8
+    .equ    TK_EOR,     TK_AND+1            |; 0xB9
+    .equ    TK_OR,      TK_EOR+1            |; 0xBA
+    .equ    TK_RSHIFT,  TK_OR+1             |; 0xBB
+    .equ    TK_LSHIFT,  TK_RSHIFT+1         |; 0xBC
+    .equ    TK_GT,      TK_LSHIFT+1         |; 0xBD
+    .equ    TK_EQUAL,   TK_GT+1             |; 0xBE
+    .equ    TK_LT,      TK_EQUAL+1          |; 0xBF
+    .equ    TK_SGN,     TK_LT+1             |; 0xC0
+    .equ    TK_INT,     TK_SGN+1            |; 0xC1
+    .equ    TK_ABS,     TK_INT+1            |; 0xC2
+    .equ    TK_USR,     TK_ABS+1            |; 0xC3
+    .equ    TK_FRE,     TK_USR+1            |; 0xC4
+    .equ    TK_POS,     TK_FRE+1            |; 0xC5
+    .equ    TK_SQR,     TK_POS+1            |; 0xC6
+    .equ    TK_RND,     TK_SQR+1            |; 0xC7
+    .equ    TK_LOG,     TK_RND+1            |; 0xC8
+    .equ    TK_EXP,     TK_LOG+1            |; 0xC9
+    .equ    TK_COS,     TK_EXP+1            |; 0xCA
+    .equ    TK_SIN,     TK_COS+1            |; 0xCB
+    .equ    TK_TAN,     TK_SIN+1            |; 0xCC
+    .equ    TK_ATN,     TK_TAN+1            |; 0xCD
+    .equ    TK_PEEK,    TK_ATN+1            |; 0xCE
+    .equ    TK_DEEK,    TK_PEEK+1           |; 0xCF
+    .equ    TK_LEEK,    TK_DEEK+1           |; 0xD0
+    .equ    TK_LEN,     TK_LEEK+1           |; 0xD1
+    .equ    TK_STRS,    TK_LEN+1            |; 0xD2
+    .equ    TK_VAL,     TK_STRS+1           |; 0xD3
+    .equ    TK_ASC,     TK_VAL+1            |; 0xD4
+    .equ    TK_UCASES,  TK_ASC+1            |; 0xD5
+    .equ    TK_LCASES,  TK_UCASES+1         |; 0xD6
+    .equ    TK_CHRS,    TK_LCASES+1         |; 0xD7
+    .equ    TK_HEXS,    TK_CHRS+1           |; 0xD8
+    .equ    TK_BINS,    TK_HEXS+1           |; 0xD9
+    .equ    TK_BITTST,  TK_BINS+1           |; 0xDA
+    .equ    TK_MAX,     TK_BITTST+1         |; 0xDB
+    .equ    TK_MIN,     TK_MAX+1            |; 0xDC
+    .equ    TK_RAM,     TK_MIN+1            |; 0xDD
+    .equ    TK_PI,      TK_RAM+1            |; 0xDE
+    .equ    TK_TWOPI,   TK_PI+1             |; 0xDF
+    .equ    TK_VPTR,    TK_TWOPI+1          |; 0xE0
+    .equ    TK_SADD,    TK_VPTR+1           |; 0xE1
+    .equ    TK_LEFTS,   TK_SADD+1           |; 0xE2
+    .equ    TK_RIGHTS,  TK_LEFTS+1          |; 0xE3
+    .equ    TK_MIDS,    TK_RIGHTS+1         |; 0xE4
+    .equ    TK_USINGS,  TK_MIDS+1           |; 0xE5
 
 
 
@@ -8460,7 +8465,7 @@ LAB_CTBL:
     dc.w    LAB_SWAP-LAB_CTBL               |; SWAP
     dc.w    LAB_BITSET-LAB_CTBL             |; BITSET
     dc.w    LAB_BITCLR-LAB_CTBL             |; BITCLR
-    dc.w    LAB_DIR-LAB_CTBL                |; DIR
+    dc.w    LAB_CAT-LAB_CTBL                |; CAT
 
 
 
@@ -8883,8 +8888,8 @@ LAB_KEYT:
     dc.w    KEY_MIDS-TAB_STAR               |; MID$(
     dc.b    'U',5
     dc.w    KEY_USINGS-TAB_STAR             |; USING$(
-    dc.b    'D',1
-    dc.w    KEY_DIR-TAB_STAR                |; DIR
+    dc.b    'C',1
+    dc.w    KEY_CAT-TAB_STAR                |; CAT
 
 
 
@@ -9014,6 +9019,9 @@ TAB_ASCC:
 KEY_CALL:
     .ascii  "ALL"                           |;  CALL
     dc.b    TK_CALL
+KEY_CAT:
+    .ascii  "AT"                            |; CAT
+    dc.b    TK_CAT
 KEY_CHRS:
     .ascii  "HR$("                          |;  CHR$(
     dc.b    TK_CHRS
@@ -9043,9 +9051,6 @@ KEY_DEF:
 KEY_DIM:
     .ascii  "IM"                            |;  DIM
     dc.b    TK_DIM
-KEY_DIR:
-    .ascii  "IR"                            |; DIR
-    dc.b    TK_DIR
 KEY_DOKE:
     .ascii  "OKE"                           |;  DOKE
     dc.b    TK_DOKE
