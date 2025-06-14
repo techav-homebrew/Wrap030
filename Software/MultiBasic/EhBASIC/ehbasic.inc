@@ -187,6 +187,9 @@ ccflag:     ds.b    1                       |; CTRL-C check flag
 ccbyte:     ds.b    1                       |; CTRL-C last received byte
 ccnull:     ds.b    1                       |; CTRL-C last received byte 'life' timer
 
+FAC1_FPU:   ds.l    1                       |; convert FAC1 for FPU functions
+FAC2_FPU:   ds.l    1                       |; convert FAC2 for FPU functions
+
 |; these variables for load/save routines
 
 filebyte:   ds.l    1
