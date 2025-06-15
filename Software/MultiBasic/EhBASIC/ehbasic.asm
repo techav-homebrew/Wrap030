@@ -350,8 +350,10 @@ LAB_CAT:
 1:  move.l  %d2,%d3                         |; copy file count
     andi.l  #3,%d3                          |; check last two bits
     beq.s   2f                              |; if null, then CRLF
-    move.b  #0x09,%d0                       |; print tab
     move.l  %d2,%sp@-                       |; save count
+    move.b  #0x20,%d0                       |; print space fallback
+    bsr     LAB_PRNA                        |;
+    move.b  #0x09,%d0                       |; print tab
     bsr     LAB_PRNA                        |;
     bra     3f                              |;
 2:  move.l  %d2,%sp@-                       |; save count
